@@ -1,112 +1,159 @@
 # Agente Vendedor
 
-Projeto SaaS para operacao comercial com agentes de IA.
+Plataforma SaaS para operacao comercial com agentes de IA focados em qualificacao, objecao, conducao e fechamento.
 
-## Features
+## Estado atual
+- Landing publica com demo interativa e captura de lead.
+- App logado com dashboard, knowledge, personas, integracoes, conversations, commissions e sales.
+- Backend FastAPI com auth por sessao via proxy Next.js.
+- RAG com ingestao de URL, upload e indexacao em Qdrant.
+- Laboratorio de simulacao com caso VINAC e avaliacao automatica.
 
-### 1) Scaffold backend FastAPI
-Descricao curta: backend inicial com healthcheck, configuracao por ambiente, logging JSON e rotas base de auth/tenant.
-Fluxo:
-1. Subir backend com Uvicorn.
-2. Chamar `GET /health` para validar disponibilidade.
-3. Chamar `GET /api/v1/auth/session` com `X-User-Id` e `X-Tenant-Id`.
+## Como o produto funciona
+O produto tem dois modos de uso complementares:
 
-### 2) Sessao segura no frontend com iron-session
-Descricao curta: login web salva sessao em cookie httpOnly e protege rotas operacionais.
-Fluxo:
-1. Abrir `/login` e informar email, senha e tenant.
-2. Frontend cria sessao em `/api/auth/login`.
-3. Middleware permite acesso a rotas como `/dashboard`.
+1. Modo publico
+- A landing apresenta a proposta comercial.
+- A demo publica conversa com o backend real.
+- O formulario da landing captura um caso comercial real e abre uma conversa persistida.
 
-### 3) Proxy autenticado Next.js -> FastAPI
-Descricao curta: requests para backend passam por rota proxy que injeta `X-User-Id` e `X-Tenant-Id`.
-Fluxo:
-1. Frontend chama `/api/proxy/...`.
-2. Proxy valida sessao.
-3. Proxy encaminha para backend com headers de contexto.
+2. Modo operacional
+- O usuario entra no app com tenant.
+- Configura cliente, produto, fontes de conhecimento, persona e integracoes.
+- Testa o agente no `Agent Lab`.
+- Acompanha metricas, historico de conversa e sinais de qualificacao no dashboard.
 
-### 4) Shell de aplicacao e paginas MVP
-Descricao curta: estrutura inicial de landing + app logado com dashboard e modulos principais.
-Fluxo:
-1. Usuario acessa landing em `/`.
-2. Usuario autentica em `/login`.
-3. Usuario navega por dashboard, clientes, produtos, knowledge, personas, integracoes e comissoes.
+## Logica de uso
+Fluxo recomendado para usar o MVP do jeito certo:
 
-### 5) Migrations de banco com Alembic
-Descricao curta: cadeia de migrations para schema inicial, indexes de performance e triggers de comissao.
-Fluxo:
-1. Configurar `MYSQL_URL` no backend.
-2. Executar `alembic upgrade head`.
-3. Confirmar que revisao atual e `003_triggers`.
+1. Criar ou acessar um tenant
+- Login em `/login`.
+- Sessao criada com `iron-session`.
+- Toda chamada autenticada passa pelo proxy do Next.js, que injeta `X-User-Id` e `X-Tenant-Id` no backend.
 
-### 6) Backend core de dominio (clients, products, commissions)
-Descricao curta: endpoints protegidos com contexto de tenant para CRUD inicial e upload validado.
-Fluxo:
-1. Chamar `POST /api/v1/clients` para criar cliente.
-2. Chamar `POST /api/v1/products` para criar produto vinculado ao cliente.
-3. Chamar `POST /api/v1/products/{id}/assets/upload` para enviar arquivo (ate 20MB).
-4. Chamar `POST /api/v1/commissions/rules` para criar regra de comissao por tenant.
+2. Estruturar contexto comercial
+- Criar cliente.
+- Criar produto.
+- Subir conhecimento no painel `Knowledge` por URL ou arquivo.
+- Publicar persona/playbook em `Personas`.
 
-### 7) Agente inicial de mensagens (simulacao + SSE)
-Descricao curta: pipeline inicial do agente comercial com classificacao de intencao, contexto e resposta em stream.
-Fluxo:
-1. Chamar `POST /api/v1/messages/simulate` com `message_text`.
-2. Backend executa grafo inicial (`classify_intent -> retrieve_context -> compose_reply`).
-3. Chamar `POST /api/v1/messages/stream` para receber tokens SSE da resposta.
+3. Testar antes de ligar canal real
+- Usar `Agent Lab` para abrir conversas locais persistidas.
+- Rodar cenarios de objecao, qualificacao e fechamento.
+- Ajustar persona, playbook e base de conhecimento.
 
-### 8) Agent Lab (pagina de teste de conversacao)
-Descricao curta: tela interna para testar conversacao em tempo real antes da integracao com Chatwoot.
-Fluxo:
-1. Fazer login em `/login` com email, senha e tenant.
-2. Abrir `/agent-lab`.
-3. Enviar mensagens e acompanhar resposta do agente em stream.
+4. Simular operacao comercial
+- Usar a demo publica para validar primeira conversa.
+- Capturar leads pela landing.
+- Conferir no dashboard leads, conversas, qualificacao iniciada e handoff pronto.
 
-### 9) Autenticacao real com tenant e role
-Descricao curta: login valida usuario, senha e acesso ao tenant no MySQL antes de criar sessao.
-Fluxo:
+5. Evoluir para omnichannel
+- Configurar integracoes.
+- Plugar Chatwoot.
+- Manter o mesmo nucleo de memoria, RAG, persona e metricas.
+
+## Modulos principais
+
+### Landing publica
+- Rota: `/`
+- Objetivo: apresentar valor, capturar demanda e mandar o lead para o backend.
+
+### Demo publica
+- Rota: `/demo`
+- Objetivo: mostrar a agente em streaming, usando sessao persistida no backend.
+
+### Agent Lab
+- Rota: `/agent-lab`
+- Objetivo: laboratorio controlado para testar memoria, follow-up e qualidade da resposta antes de integrar canais reais.
+
+### Knowledge
+- Rota: `/knowledge`
+- Objetivo: ingerir conhecimento, reindexar fontes e testar recuperacao semantica.
+
+### Personas
+- Rota: `/personas`
+- Objetivo: editar e publicar o playbook comercial sem mexer em codigo.
+
+### Dashboard
+- Rota: `/dashboard`
+- Objetivo: acompanhar setup do tenant e sinais de operacao comercial.
+
+## Fluxos tecnicos
+
+### Auth
 1. Frontend envia credenciais para `/api/auth/login`.
-2. Backend valida email/senha e membership em `tenant_users`.
-3. Sessao iron-session armazena `userId`, `tenantId`, `role` e `email`.
+2. Backend valida usuario, tenant e senha.
+3. Frontend salva sessao segura em cookie `httpOnly`.
+4. Middleware protege todas as rotas do app.
 
-### 10) Registro de usuario de teste
-Descricao curta: cadastro para homologacao local com associacao de role no tenant.
-Fluxo:
-1. Abrir `/register`.
-2. Informar nome, email, senha, tenant (slug ou id) e role.
-3. Backend cria usuario e vinculo em `tenant_users`.
+### Demo publica
+1. Frontend chama `/api/demo/stream`.
+2. Route handler encaminha para `/api/v1/public/demo/stream`.
+3. Backend cria ou reaproveita `conversation_id`.
+4. Agente responde via SSE.
+5. Mensagens ficam persistidas no banco.
 
-### 11) Stack local quase producao
-Descricao curta: infraestrutura local com MySQL, Redis, Qdrant e Adminer via Docker Compose.
-Fluxo:
-1. Executar `docker compose up -d`.
-2. Rodar `backend/scripts/bootstrap_local.ps1` para migrations e seed.
-3. Iniciar backend (`uvicorn`) e frontend (`next dev`).
+### Captura de lead
+1. Landing envia formulario para `/api/marketing/leads`.
+2. Backend cria `lead` + `conversation`.
+3. O historico inicial fica salvo para retomada comercial posterior.
 
-## Testes profundos locais
-Pre-requisito:
-- Docker Desktop em execucao.
+### Dashboard
+1. Frontend chama `/api/proxy/dashboard/overview`.
+2. Backend agrega metricas do tenant.
+3. O frontend so renderiza; a logica de contagem fica centralizada no backend.
 
-1. Infra:
-- `docker compose up -d`
-2. Backend:
-- `cd backend`
-- `pip install -r requirements.txt`
-- `alembic upgrade head`
-- `python scripts/seed_deep_test_data.py`
-- `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`
-3. Frontend:
-- `cd frontend`
-- `npm install`
-- `npm run dev -- --hostname 127.0.0.1 --port 3000`
-4. Acesso:
-- login: `http://127.0.0.1:3000/login`
-- email seed: `admin@agentevendedor.example.com`
-- senha seed: `12345678`
-- tenant: `tenant-lab`
+## Enderecos locais
+- Landing: `http://127.0.0.1:3000/`
+- Demo: `http://127.0.0.1:3000/demo`
+- Login: `http://127.0.0.1:3000/login`
+- Dashboard: `http://127.0.0.1:3000/dashboard`
+- Agent Lab: `http://127.0.0.1:3000/agent-lab`
+- Knowledge: `http://127.0.0.1:3000/knowledge`
+- Backend health: `http://127.0.0.1:8000/health`
 
-Atalho PowerShell:
-- `.\scripts\start-local-tests.ps1`
+## Ambiente local
 
-Se o MySQL local falhar na primeira inicializacao:
-- `.\scripts\reset-local-tests.ps1`
-- depois `.\scripts\start-local-tests.ps1`
+### Infra
+- MySQL
+- Redis
+- Qdrant
+- Adminer
+
+Suba com:
+
+```powershell
+docker compose up -d
+```
+
+### Bootstrap
+
+```powershell
+.\scripts\start-local-tests.ps1
+```
+
+Se o ambiente estiver corrompido:
+
+```powershell
+.\scripts\reset-local-tests.ps1
+.\scripts\start-local-tests.ps1
+```
+
+## Credenciais seed
+- Email: `admin@agentevendedor.example.com`
+- Senha: `12345678`
+- Tenant: `tenant-lab`
+
+## Validacoes importantes
+- `python -m compileall backend`
+- `npm run typecheck`
+- `npm run build`
+
+## Documentacao complementar
+- Logica de uso detalhada: [docs/project-usage.md](C:/Users/ilki/OneDrive/Desktop/Agente%20Vendedor/docs/project-usage.md)
+- Plano de implementacao: [docs/implementation-plan.md](C:/Users/ilki/OneDrive/Desktop/Agente%20Vendedor/docs/implementation-plan.md)
+- PRD backend: [docs/prd-backend.md](C:/Users/ilki/OneDrive/Desktop/Agente%20Vendedor/docs/prd-backend.md)
+- PRD frontend: [docs/prd-frontend.md](C:/Users/ilki/OneDrive/Desktop/Agente%20Vendedor/docs/prd-frontend.md)
+
+
+

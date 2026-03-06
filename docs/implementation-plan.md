@@ -1,4 +1,29 @@
-﻿# Implementation Plan - Agente Vendedor IA
+# Implementation Plan - Agente Vendedor IA
+
+## Status atual
+
+### Entregue
+- Infra backend/frontend operacional.
+- Banco, migrations e seed local.
+- Auth real com tenant.
+- Agent Lab com historico persistido.
+- Knowledge com ingestao, reindexacao e busca semantica.
+- Personas/playbook com publicacao.
+- Dashboard inicial com metricas operacionais.
+- Landing publica com demo conectada ao backend real.
+- Captura de lead publica persistida no backend.
+- Laboratorio VINAC com avaliacao automatica.
+
+### Em evolucao
+- Integracao Chatwoot real por webhook.
+- Score de lead e motivo de handoff.
+- Regressao automatica da demo publica.
+- Fechamento do fluxo omnichannel ponta a ponta.
+
+### Como ler este plano
+- Os batches abaixo misturam itens ja entregues e itens futuros.
+- Use a secao `Status atual` para saber o que esta pronto agora.
+- Use os batches para localizar proximas implementacoes.
 
 ## Batch 1: Infraestrutura
 - Task 1.1: Criar estrutura base de pastas backend/frontend | Arquivos: `backend/app/*`, `frontend/app/*` | Verificacao: repositorio compila sem erro de import inicial.
@@ -55,3 +80,6 @@
 - Agent vende com fluxo dinamico, objecoes e follow-up.
 - Dashboard de metricas funcional.
 - Comissao configuravel no painel e calculada automaticamente.
+
+
+
