@@ -54,10 +54,19 @@ export function AgentStage({ variant = "hero" }: AgentStageProps) {
           <div className="mt-4 grid gap-4 lg:grid-cols-[220px_1fr]">
             <div className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-4">
               <div className="relative mx-auto h-44 w-full max-w-[180px] overflow-hidden rounded-[28px] border border-white/12 bg-[radial-gradient(circle_at_50%_20%,rgba(122,210,255,0.38),transparent_35%),linear-gradient(180deg,#1c355f,#0b1326)]">
+                <div className="spot-pulse absolute left-1/2 top-11 h-24 w-24 -translate-x-1/2 rounded-full bg-[#7ad2ff]/18 blur-2xl" />
                 <div className="absolute inset-x-0 bottom-0 h-[55%] rounded-t-[38px] bg-[linear-gradient(180deg,#ff9f7a,#ff6d45)]" />
                 <div className="absolute left-1/2 top-[22%] h-20 w-20 -translate-x-1/2 rounded-full border border-white/18 bg-[radial-gradient(circle_at_45%_35%,#ffd7b8,transparent_35%),linear-gradient(180deg,#423355,#131a2f)] shadow-[0_12px_22px_rgba(0,0,0,0.28)]" />
-                <div className="absolute left-1/2 top-[34%] h-10 w-16 -translate-x-1/2 rounded-[40px] border border-white/10 bg-[#f7c6a1]" />
+                <div className="absolute left-[39%] top-[36%] h-1.5 w-1.5 rounded-full bg-[#2a2533]" />
+                <div className="absolute right-[39%] top-[36%] h-1.5 w-1.5 rounded-full bg-[#2a2533]" />
+                <div className="blink absolute left-1/2 top-[34%] h-10 w-16 -translate-x-1/2 rounded-[40px] border border-white/10 bg-[#f7c6a1]" />
                 <div className="absolute inset-x-6 bottom-0 h-24 rounded-t-[28px] bg-[linear-gradient(180deg,#f3f0ef,#d7d2d8)]" />
+                <div className="equalizer absolute bottom-4 left-1/2 flex -translate-x-1/2 items-end gap-1">
+                  <span className="bar h-2 w-1 rounded-full bg-[#7ad2ff]" />
+                  <span className="bar h-4 w-1 rounded-full bg-[#7ad2ff]" />
+                  <span className="bar h-6 w-1 rounded-full bg-[#ffb86a]" />
+                  <span className="bar h-3 w-1 rounded-full bg-[#7ad2ff]" />
+                </div>
               </div>
 
               <div className="mt-4 text-center">

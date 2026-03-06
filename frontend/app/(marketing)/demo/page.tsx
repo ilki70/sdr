@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 
 import { AgentStage } from "@/components/marketing/agent-stage";
+import { DemoConsole } from "@/components/marketing/demo-console";
 import { marketingSans, marketingSerif } from "@/components/marketing/fonts";
 
 const checkpoints = [
@@ -53,23 +54,7 @@ export default function DemoPage() {
           <AgentStage variant="demo" />
         </section>
 
-        <section className="grid gap-5 lg:grid-cols-3">
-          <article className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-6">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-[#7ad2ff]">Cenario 01</p>
-            <h2 className="mt-4 text-2xl font-semibold text-white">Lead frio entrando no canal</h2>
-            <p className="mt-4 text-sm leading-7 text-white/66">A agente identifica dor, enquadra faixa de valor e evita despejar brochure no primeiro contato.</p>
-          </article>
-          <article className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-6">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-[#ffb86a]">Cenario 02</p>
-            <h2 className="mt-4 text-2xl font-semibold text-white">Objecao e comparacao</h2>
-            <p className="mt-4 text-sm leading-7 text-white/66">Quando o lead questiona prazo, juros, risco ou regra do produto, ela ancora a resposta nas fontes oficiais.</p>
-          </article>
-          <article className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-6">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-[#ff875a]">Cenario 03</p>
-            <h2 className="mt-4 text-2xl font-semibold text-white">Fechamento e follow-up</h2>
-            <p className="mt-4 text-sm leading-7 text-white/66">A conversa sempre termina com proximo passo claro: simulacao, proposta, contrato ou retorno automatizado.</p>
-          </article>
-        </section>
+        <DemoConsole />
       </div>
     </main>
   );

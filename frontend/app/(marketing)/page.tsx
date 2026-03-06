@@ -31,6 +31,35 @@ const proofPoints = [
   "Laboratorio para simular objecoes e validar grounding",
 ];
 
+const cases = [
+  {
+    sector: "Consorcios e credito",
+    title: "Agente que nao atropela o lead",
+    text: "Abre pela dor, enquadra parcela, puxa o veiculo desejado e encaminha para simulacao sem inventar condicoes.",
+    metric: "Memoria + grounding",
+  },
+  {
+    sector: "Servicos B2B complexos",
+    title: "Primeiro contato que qualifica de verdade",
+    text: "Separa curiosidade de oportunidade real, captura contexto comercial e devolve pro time humano ja com resumo executivo.",
+    metric: "SDR digital persistente",
+  },
+  {
+    sector: "Operacao omnichannel",
+    title: "Mesmo discurso, varios canais",
+    text: "A conversa pode nascer no WhatsApp, migrar para email e seguir com contexto unico dentro do funil.",
+    metric: "Canal sem perda de contexto",
+  },
+];
+
+const credibilityStrip = [
+  "Playbook versionado",
+  "Mensagens fragmentadas",
+  "Follow-up automatico",
+  "Memoria por conversa",
+  "Roteiro comercial auditavel",
+];
+
 export default function MarketingPage() {
   return (
     <main className={`${marketingSans.variable} ${marketingSerif.variable} min-h-screen overflow-hidden bg-[#060b16] text-[#f5f1ea]`}>
@@ -47,6 +76,7 @@ export default function MarketingPage() {
             <nav className="flex items-center gap-3 text-sm text-white/60">
               <a href="#como-funciona" className="transition hover:text-white">Como funciona</a>
               <a href="#motor" className="transition hover:text-white">Motor comercial</a>
+              <a href="#cases" className="transition hover:text-white">Casos</a>
               <a href="#demo" className="transition hover:text-white">Demo</a>
             </nav>
             <div className="flex items-center gap-3">
@@ -174,6 +204,43 @@ export default function MarketingPage() {
         </div>
       </section>
 
+      <section id="cases" className="mx-auto w-full max-w-7xl px-6 pb-20 md:px-8 lg:px-10">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.3em] text-[#7ad2ff]">Casos e leitura de valor</p>
+            <h2 className="mt-4 max-w-3xl text-4xl font-semibold leading-tight text-white md:text-5xl">
+              A mesma interface pode vender
+              <span className={`${marketingSerif.className} ml-2 text-[#ffccb8]`}>segmentos diferentes</span>
+              sem perder disciplina comercial.
+            </h2>
+          </div>
+          <div className="rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/66">
+            O formato muda. O principio continua: qualificar, conduzir e fechar.
+          </div>
+        </div>
+
+        <div className="mt-8 grid gap-5 lg:grid-cols-3">
+          {cases.map((item) => (
+            <article key={item.title} className="rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-6">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-white/35">{item.sector}</p>
+              <h3 className="mt-4 text-2xl font-semibold text-white">{item.title}</h3>
+              <p className="mt-4 text-sm leading-7 text-white/68">{item.text}</p>
+              <div className="mt-6 rounded-[22px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-[#7ad2ff]">
+                {item.metric}
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div className="mt-8 flex flex-wrap gap-3">
+          {credibilityStrip.map((item) => (
+            <span key={item} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70">
+              {item}
+            </span>
+          ))}
+        </div>
+      </section>
+
       <section id="demo" className="mx-auto w-full max-w-7xl px-6 pb-24 md:px-8 lg:px-10">
         <div className="overflow-hidden rounded-[40px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-7 md:p-10">
           <div className="grid gap-10 lg:grid-cols-[0.78fr_1.22fr] lg:items-center">
@@ -188,7 +255,7 @@ export default function MarketingPage() {
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
                 <Link href="/demo" className="rounded-full bg-[#7ad2ff] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[#95dcff]">
-                  Abrir demo da landing
+                  Abrir demo interativa
                 </Link>
                 <Link href="/login" className="rounded-full border border-white/12 px-6 py-3 text-sm font-semibold text-white/85 transition hover:bg-white/6">
                   Ir para o app
