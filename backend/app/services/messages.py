@@ -171,6 +171,9 @@ async def persist_conversation_exchange(
     model_name: str | None = None,
     reply_fragments: list[str] | None = None,
     follow_up_suggestion: str | None = None,
+    funnel_stage: str | None = None,
+    handoff_required: bool = False,
+    handoff_reason: str | None = None,
 ) -> None:
     await save_message(
         db=db,
@@ -194,17 +197,24 @@ async def persist_conversation_exchange(
             "confidence_score": confidence_score,
             "reply_fragments": reply_fragments or [],
             "follow_up_suggestion": follow_up_suggestion,
+            "funnel_stage": funnel_stage,
+            "handoff_required": handoff_required,
+            "handoff_reason": handoff_reason,
         },
     )
     await db.execute(
         update(Conversation)
         .where(Conversation.id == conversation.id)
-        .values(status="open", updated_at=func.now())
+        .values(status="handoff_pending" if handoff_required else "open", updated_at=func.now())
     )
     await db.execute(
         update(Lead)
         .where(Lead.id == conversation.lead_id)
-        .values(last_seen_at=func.now(), lifecycle_status="engaged", updated_at=func.now())
+        .values(
+            last_seen_at=func.now(),
+            lifecycle_status=("handoff_pending" if handoff_required else (funnel_stage or "engaged")),
+            updated_at=func.now(),
+        )
     )
     await db.commit()
 

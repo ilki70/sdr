@@ -103,6 +103,22 @@ def _infer_funnel_stage(state: AgentState) -> str:
     return "discovery"
 
 
+def _detect_handoff_need(state: AgentState) -> tuple[bool, str | None]:
+    query = _fold(state.message_text)
+    reasons: list[str] = []
+    if any(term in query for term in ["quero falar com humano", "falar com vendedor", "atendente", "pessoa real", "ligacao", "me liga"]):
+        reasons.append("solicitacao_explicita_de_humano")
+    if any(term in query for term in ["assinar", "fechar", "proposta", "contrato", "boleto", "pagamento", "documento", "cnh", "comprovante"]):
+        reasons.append("momento_de_fechamento_ou_documentacao")
+    if any(term in query for term in ["cancelamento", "reembolso", "juridico", "bacen", "processo", "reclamacao"]):
+        reasons.append("tema_sensivel_ou_regulatorio")
+    if state.funnel_stage == "closing":
+        reasons.append("lead_em_etapa_de_closing")
+    if reasons:
+        return True, ", ".join(dict.fromkeys(reasons))
+    return False, None
+
+
 def _build_follow_up_suggestion(state: AgentState, persona: dict[str, Any] | None) -> str:
     tone = _fold(persona["tone"]) if persona else "consultivo"
     query = _fold(state.message_text)
@@ -169,6 +185,10 @@ async def compose_reply(state: AgentState) -> AgentState:
     history_block = " | ".join(history_lines[-8:]) if history_lines else "sem historico anterior"
     persona = await get_active_persona_context(state.tenant_id)
     stage_name, stage_guidance = _build_stage_guidance(state, persona)
+    state.funnel_stage = stage_name
+    handoff_required, handoff_reason = _detect_handoff_need(state)
+    state.handoff_required = handoff_required
+    state.handoff_reason = handoff_reason
     persona_block = (
         f"Persona ativa={persona['persona_name']}. "
         f"Tom={persona['tone']}. "
@@ -217,7 +237,12 @@ async def compose_reply(state: AgentState) -> AgentState:
     )
     state.draft_reply = await generate_sales_reply(prompt)
     _enforce_grounding_rules(state)
+    if state.handoff_required and state.channel == "whatsapp":
+        suffix = "Vou deixar um especialista assumir daqui." if state.funnel_stage == "closing" else "Vou acionar um especialista para seguir com voce."
+        if suffix.lower() not in state.draft_reply.lower():
+            state.draft_reply = f"{state.draft_reply.rstrip()} {suffix}"
     state.reply_fragments = _split_reply_fragments(state.draft_reply)
     state.follow_up_suggestion = _build_follow_up_suggestion(state, persona)
-    state.next_action = "send"
+    state.lead_stage = state.funnel_stage
+    state.next_action = "handoff" if state.handoff_required else "send"
     return state

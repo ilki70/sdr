@@ -405,17 +405,24 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
             "confidence_score": state.confidence_score,
             "reply_fragments": state.reply_fragments,
             "follow_up_suggestion": state.follow_up_suggestion,
+            "funnel_stage": state.funnel_stage,
+            "handoff_required": state.handoff_required,
+            "handoff_reason": state.handoff_reason,
         },
     )
     await db.execute(
         update(Conversation)
         .where(Conversation.id == conversation.id)
-        .values(status="open", updated_at=func.now())
+        .values(status="handoff_pending" if state.handoff_required else "open", updated_at=func.now())
     )
     await db.execute(
         update(Lead)
         .where(Lead.id == lead.id)
-        .values(last_seen_at=func.now(), lifecycle_status="engaged", updated_at=func.now())
+        .values(
+            last_seen_at=func.now(),
+            lifecycle_status=("handoff_pending" if state.handoff_required else state.funnel_stage),
+            updated_at=func.now(),
+        )
     )
     await db.commit()
 

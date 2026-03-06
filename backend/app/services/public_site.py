@@ -205,6 +205,9 @@ async def run_public_demo_exchange(
         model_name=settings.openai_model if settings.openai_api_key else "mock-llm",
         reply_fragments=state.reply_fragments,
         follow_up_suggestion=state.follow_up_suggestion,
+        funnel_stage=state.funnel_stage,
+        handoff_required=state.handoff_required,
+        handoff_reason=state.handoff_reason,
     )
     return state
 
@@ -243,5 +246,8 @@ async def capture_marketing_lead(
             "Nosso time vai usar este contexto para priorizar o contato.",
         ],
         follow_up_suggestion="Revisar lead capturado e iniciar contato consultivo.",
+        funnel_stage="qualification",
+        handoff_required=True,
+        handoff_reason="lead_capturado_na_landing_para_contato_humano",
     )
     return conversation.lead_id, conversation.id

@@ -122,6 +122,9 @@ async def simulate_message(
         model_name=settings.openai_model if settings.openai_api_key else "mock-llm",
         reply_fragments=state.reply_fragments,
         follow_up_suggestion=state.follow_up_suggestion,
+        funnel_stage=state.funnel_stage,
+        handoff_required=state.handoff_required,
+        handoff_reason=state.handoff_reason,
     )
     return MessageSimulateResponse(
         conversation_id=conversation_id,
@@ -157,6 +160,9 @@ async def stream_message(
         model_name=settings.openai_model if settings.openai_api_key else "mock-llm",
         reply_fragments=state.reply_fragments,
         follow_up_suggestion=state.follow_up_suggestion,
+        funnel_stage=state.funnel_stage,
+        handoff_required=state.handoff_required,
+        handoff_reason=state.handoff_reason,
     )
 
     async def event_generator():
@@ -166,7 +172,7 @@ async def stream_message(
             await asyncio.sleep(0.03)
         yield (
             "data: "
-            f"{json.dumps({'done': True, 'intent': state.intent, 'conversation_id': conversation_id, 'reply_fragments': state.reply_fragments, 'follow_up_suggestion': state.follow_up_suggestion})}\n\n"
+            f"{json.dumps({'done': True, 'intent': state.intent, 'conversation_id': conversation_id, 'reply_fragments': state.reply_fragments, 'follow_up_suggestion': state.follow_up_suggestion, 'funnel_stage': state.funnel_stage, 'handoff_required': state.handoff_required, 'handoff_reason': state.handoff_reason})}\n\n"
         )
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

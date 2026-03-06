@@ -30,6 +30,21 @@ type EvaluationRun = {
   created_at: string;
 };
 
+type StageMetric = {
+  stage: string;
+  count: number;
+};
+
+type HandoffQueueItem = {
+  conversation_id: string;
+  title: string;
+  lead_id: string;
+  channel: string;
+  handoff_reason: string | null;
+  updated_at: string;
+  last_message_preview: string | null;
+};
+
 type DashboardOverview = {
   lead_count: number;
   engaged_lead_count: number;
@@ -43,6 +58,8 @@ type DashboardOverview = {
   active_integration_count: number;
   sales_count: number;
   revenue_total: string;
+  stage_metrics: StageMetric[];
+  handoff_queue: HandoffQueueItem[];
   recent_jobs: DashboardJob[];
   recent_conversations: DashboardConversation[];
   latest_evaluation: EvaluationRun | null;
@@ -166,6 +183,7 @@ export default function DashboardPage() {
     { label: "Integracoes ativas", value: data?.active_integration_count ?? 0 },
     { label: "Regras de comissao", value: data?.active_rule_count ?? 0 },
   ];
+  const stageMetrics = data?.stage_metrics ?? [];
 
   return (
     <main className="space-y-6">
@@ -272,6 +290,15 @@ export default function DashboardPage() {
         ))}
       </section>
 
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {stageMetrics.map((metric) => (
+          <article key={metric.stage} className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,193,122,0.12),rgba(255,193,122,0.04))] p-5">
+            <p className="text-sm capitalize text-white/60">{metric.stage}</p>
+            <p className="mt-3 text-3xl font-semibold">{metric.count}</p>
+          </article>
+        ))}
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-2">
         <article className="rounded-[24px] border border-white/10 bg-white/5 p-5">
           <p className="text-sm text-white/60">Receita total registrada</p>
@@ -330,6 +357,24 @@ export default function DashboardPage() {
                   <p className="mt-2 text-xs uppercase tracking-wide text-white/35">{conversation.message_count} mensagens</p>
                 </article>
               ))}
+            </div>
+          </section>
+
+          <section className="rounded-[28px] border border-white/10 bg-white/5 p-6">
+            <h2 className="text-xl font-semibold">Fila de handoff</h2>
+            <div className="mt-4 space-y-3">
+              {data?.handoff_queue.length ? (
+                data.handoff_queue.map((item) => (
+                  <article key={item.conversation_id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <strong className="text-sm">{item.title}</strong>
+                    <p className="mt-2 text-xs uppercase tracking-wide text-white/35">{item.channel}</p>
+                    <p className="mt-2 text-sm text-white/65">{item.handoff_reason || "handoff solicitado"}</p>
+                    <p className="mt-2 text-xs text-white/50">{formatDateTimeSP(item.updated_at)}</p>
+                  </article>
+                ))
+              ) : (
+                <p className="text-sm text-white/60">Nenhuma conversa aguardando humano.</p>
+              )}
             </div>
           </section>
         </div>

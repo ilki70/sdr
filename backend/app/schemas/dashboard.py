@@ -29,6 +29,21 @@ class DashboardLatestEvaluationResponse(BaseModel):
     created_at: datetime
 
 
+class DashboardStageMetricResponse(BaseModel):
+    stage: str
+    count: int
+
+
+class DashboardHandoffQueueItemResponse(BaseModel):
+    conversation_id: str
+    title: str
+    lead_id: str
+    channel: str
+    handoff_reason: str | None = None
+    updated_at: datetime
+    last_message_preview: str | None = None
+
+
 class DashboardOverviewResponse(BaseModel):
     lead_count: int
     engaged_lead_count: int
@@ -42,6 +57,8 @@ class DashboardOverviewResponse(BaseModel):
     active_integration_count: int
     sales_count: int
     revenue_total: Decimal
+    stage_metrics: list[DashboardStageMetricResponse]
+    handoff_queue: list[DashboardHandoffQueueItemResponse]
     recent_jobs: list[DashboardRecentJobResponse]
     recent_conversations: list[DashboardRecentConversationResponse]
     latest_evaluation: DashboardLatestEvaluationResponse | None

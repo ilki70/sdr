@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.core.db import SessionLocal
-from app.models.entities import Client, Product, Tenant, TenantUser, User
+from app.models.entities import BotPersona, Client, PersonaVersion, Product, Tenant, TenantUser, User
 from app.services.auth import hash_password
 from app.services.vinac_lab import ensure_vinac_knowledge
 
@@ -122,11 +122,68 @@ async def ensure_client_and_product(tenant_id: str) -> tuple[str, str]:
         return client.id, product.id
 
 
+async def ensure_vinac_persona(tenant_id: str, user_id: str) -> None:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(BotPersona).where(BotPersona.tenant_id == tenant_id, BotPersona.name == "VINAC Consultora Karina")
+        )
+        persona = result.scalar_one_or_none()
+        if persona:
+            return
+
+        persona = BotPersona(
+            id=str(uuid4()),
+            tenant_id=tenant_id,
+            name="VINAC Consultora Karina",
+            description="Persona comercial inspirada na abordagem consultiva da VINAC para WhatsApp e fechamento assistido.",
+            active_version_no=1,
+            is_active=True,
+        )
+        session.add(persona)
+        await session.flush()
+
+        version = PersonaVersion(
+            id=str(uuid4()),
+            tenant_id=tenant_id,
+            persona_id=persona.id,
+            version_no=1,
+            tone="consultiva, humana e segura",
+            approach_rules_json={
+                "rules": [
+                    "Responda em frases curtas para WhatsApp.",
+                    "Confirme sempre carro, faixa de parcela e urgencia.",
+                    "Use somente fatos oficiais da VINAC para regras e condicoes.",
+                    "Quando o lead estiver pronto para fechar, encaminhe para proposta e contrato digital.",
+                ],
+                "stage_playbook": {
+                    "discovery": "Abra com empatia curta, entenda carro desejado, contexto e objetivo de compra.",
+                    "qualification": "Confirme valor do bem, faixa de parcela, momento de compra e se o lead aceita ajustar o plano.",
+                    "objection": "Trate juros, taxa, seguranca e comparacao com financiamento com fatos oficiais e sem prometer alem do contexto.",
+                    "closing": "Conduza para proposta, contrato digital, pagamento da primeira parcela e inicio da concorrencia.",
+                },
+            },
+            objection_playbook_json={
+                "juros": "Explique que o contexto oficial trata consorcio sem juros e com taxa de administracao de 12 por cento.",
+                "confianca": "Use Banco Central, certidao oficial e operacao da administradora como base de confianca.",
+                "orcamento": "Se a parcela estiver abaixo da faixa, reconheca, mostre o minimo oficial e proponha simulacao ajustada.",
+            },
+            prompt_system=(
+                "Voce e Karina, consultora comercial da VINAC. Fale em portugues do Brasil, de forma humana, objetiva e segura. "
+                "Sua missao e conduzir o lead ate simulacao, proposta ou adesao sem inventar condicoes."
+            ),
+            is_published=True,
+            created_by_user_id=user_id,
+        )
+        session.add(version)
+        await session.commit()
+
+
 async def main() -> None:
     settings = get_settings()
     await ensure_system_user()
-    tenant_id, _user_id = await ensure_admin_and_tenant()
+    tenant_id, user_id = await ensure_admin_and_tenant()
     _client_id, product_id = await ensure_client_and_product(tenant_id)
+    await ensure_vinac_persona(tenant_id, user_id)
     await ensure_vinac_knowledge(tenant_id, product_id)
 
     print("seed_done=true")
