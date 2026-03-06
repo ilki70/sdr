@@ -1,0 +1,55 @@
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node / Next
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+out/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
+
+# Build / runtime artifacts
+*.log
+coverage/
+htmlcov/
+backend/uploads/
+backend/*.db
+backend/*.sqlite3
+frontend/.turbo/
+
+# Local lab artifacts
+tmp_vinac_*.html
+tmp_vinac_*.xml
+
+# Docker / local data
+mysql_data/
+redis_data/
+qdrant_data/
+
+# Misc
+*.tmp
+*.bak
+
+*.tsbuildinfo
