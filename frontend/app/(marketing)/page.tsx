@@ -2,6 +2,7 @@
 
 import { AgentStage } from "@/components/marketing/agent-stage";
 import { marketingSans, marketingSerif } from "@/components/marketing/fonts";
+import { LeadCaptureForm } from "@/components/marketing/lead-capture-form";
 
 const capabilityCards = [
   {
@@ -78,6 +79,7 @@ export default function MarketingPage() {
               <a href="#motor" className="transition hover:text-white">Motor comercial</a>
               <a href="#cases" className="transition hover:text-white">Casos</a>
               <a href="#demo" className="transition hover:text-white">Demo</a>
+              <a href="#captura" className="transition hover:text-white">Contato</a>
             </nav>
             <div className="flex items-center gap-3">
               <Link href="/login" className="rounded-full border border-white/12 px-4 py-2 text-sm text-white/85 transition hover:bg-white/6">
@@ -107,9 +109,9 @@ export default function MarketingPage() {
                 <Link href="/demo" className="rounded-full bg-[#ff875a] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[#ff9b75]">
                   Ver experiencia da agente
                 </Link>
-                <Link href="/login" className="rounded-full border border-white/12 px-6 py-3 text-sm font-semibold text-white/88 transition hover:bg-white/6">
-                  Entrar na plataforma
-                </Link>
+                <a href="#captura" className="rounded-full border border-white/12 px-6 py-3 text-sm font-semibold text-white/88 transition hover:bg-white/6">
+                  Pedir avaliacao consultiva
+                </a>
               </div>
 
               <div className="mt-10 grid gap-4 sm:grid-cols-3">
@@ -257,15 +259,19 @@ export default function MarketingPage() {
                 <Link href="/demo" className="rounded-full bg-[#7ad2ff] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[#95dcff]">
                   Abrir demo interativa
                 </Link>
-                <Link href="/login" className="rounded-full border border-white/12 px-6 py-3 text-sm font-semibold text-white/85 transition hover:bg-white/6">
-                  Ir para o app
-                </Link>
+                <a href="#captura" className="rounded-full border border-white/12 px-6 py-3 text-sm font-semibold text-white/85 transition hover:bg-white/6">
+                  Capturar um caso real
+                </a>
               </div>
             </div>
 
             <AgentStage variant="demo" />
           </div>
         </div>
+      </section>
+
+      <section id="captura" className="mx-auto w-full max-w-7xl px-6 pb-24 md:px-8 lg:px-10">
+        <LeadCaptureForm />
       </section>
     </main>
   );

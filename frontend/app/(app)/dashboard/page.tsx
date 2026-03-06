@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
+
 import { fetchJson } from "@/lib/api";
 import { formatDateTimeSP } from "@/lib/datetime";
 
@@ -30,9 +31,14 @@ type EvaluationRun = {
 };
 
 type DashboardOverview = {
+  lead_count: number;
+  engaged_lead_count: number;
   client_count: number;
   product_count: number;
   conversation_count: number;
+  qualification_started_count: number;
+  handoff_ready_count: number;
+  avg_messages_per_conversation: number;
   active_rule_count: number;
   active_integration_count: number;
   sales_count: number;
@@ -66,13 +72,21 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const cards = [
+  const coreCards = [
+    { label: "Leads", value: data?.lead_count ?? 0 },
+    { label: "Leads engajados", value: data?.engaged_lead_count ?? 0 },
     { label: "Clientes", value: data?.client_count ?? 0 },
     { label: "Produtos", value: data?.product_count ?? 0 },
     { label: "Conversas", value: data?.conversation_count ?? 0 },
-    { label: "Regras de comissao", value: data?.active_rule_count ?? 0 },
-    { label: "Integracoes", value: data?.active_integration_count ?? 0 },
     { label: "Vendas", value: data?.sales_count ?? 0 },
+  ];
+
+  const funnelCards = [
+    { label: "Qualificacao iniciada", value: data?.qualification_started_count ?? 0 },
+    { label: "Prontas para handoff", value: data?.handoff_ready_count ?? 0 },
+    { label: "Media de mensagens", value: data?.avg_messages_per_conversation ?? 0 },
+    { label: "Integracoes ativas", value: data?.active_integration_count ?? 0 },
+    { label: "Regras de comissao", value: data?.active_rule_count ?? 0 },
   ];
 
   return (
@@ -81,15 +95,24 @@ export default function DashboardPage() {
         <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--accent)]">Control Room</p>
         <h1 className="mt-3 text-3xl font-semibold">Dashboard operacional</h1>
         <p className="mt-2 text-sm text-white/70">
-          Referencia horaria fixa em Sao Paulo. Use este painel para ver setup comercial, atividade recente e resultado das avaliacoes automaticas.
+          Referencia horaria fixa em Sao Paulo. Este painel agora agrega sinais de marketing, qualificacao e handoff no backend, sem depender de leitura local do frontend.
         </p>
       </section>
 
       {error ? <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {cards.map((card) => (
+        {coreCards.map((card) => (
           <article key={card.label} className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+            <p className="text-sm text-white/60">{card.label}</p>
+            <p className="mt-3 text-3xl font-semibold">{card.value}</p>
+          </article>
+        ))}
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-5">
+        {funnelCards.map((card) => (
+          <article key={card.label} className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(122,210,255,0.12),rgba(122,210,255,0.04))] p-5">
             <p className="text-sm text-white/60">{card.label}</p>
             <p className="mt-3 text-3xl font-semibold">{card.value}</p>
           </article>

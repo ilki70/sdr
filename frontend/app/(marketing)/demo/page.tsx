@@ -18,7 +18,7 @@ export default function DemoPage() {
         <header className="flex flex-wrap items-center justify-between gap-4 rounded-full border border-white/10 bg-white/5 px-5 py-3 backdrop-blur-md">
           <div>
             <p className="text-[11px] uppercase tracking-[0.3em] text-[#7ad2ff]">Demo</p>
-            <strong className="mt-1 block text-sm font-medium text-white/88">Mockup da agente comercial</strong>
+            <strong className="mt-1 block text-sm font-medium text-white/88">Mockup da agente comercial com backend real</strong>
           </div>
           <div className="flex items-center gap-3">
             <Link href="/" className="rounded-full border border-white/12 px-4 py-2 text-sm text-white/85 transition hover:bg-white/6">
@@ -39,7 +39,7 @@ export default function DemoPage() {
               da vendedora digital.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-8 text-white/68">
-              Em vez de mostrar um chatbot generico, a demo posiciona a agente como um ativo comercial: rosto, ritmo de conversa, contexto e direcao de fechamento.
+              Em vez de mostrar um chatbot generico, a demo posiciona a agente como um ativo comercial: rosto, ritmo de conversa, contexto e direcao de fechamento. Agora a conversa publica ja passa pelo backend do MVP e persiste a sessao.
             </p>
 
             <div className="mt-8 space-y-3">

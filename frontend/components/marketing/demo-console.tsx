@@ -8,6 +8,14 @@ type DemoMessage = {
   content: string;
 };
 
+type DonePayload = {
+  done?: boolean;
+  conversation_id?: string;
+  reply_fragments?: string[];
+  follow_up_suggestion?: string | null;
+  qualification_signals?: string[];
+};
+
 function createId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -24,13 +32,14 @@ export function DemoConsole() {
       id: createId(),
       role: "agent",
       content:
-        "Eu sou a demo publica da Aurora. Me provoque com duvidas de venda, objecoes ou cenarios de qualificacao e eu vou te mostrar o ritmo da conversa.",
+        "Eu sou a demo publica conectada ao backend real do produto. Me provoque com objecoes, qualificacao e cenarios de venda para eu mostrar memoria, proximo passo e handoff.",
     },
   ]);
   const [input, setInput] = useState(starterPrompts[0]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [nextStep, setNextStep] = useState<string | null>(null);
-  const [qualification, setQualification] = useState<string[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [followUpSuggestion, setFollowUpSuggestion] = useState<string | null>(null);
+  const [qualificationSignals, setQualificationSignals] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const canSend = useMemo(() => input.trim().length > 0 && !isStreaming, [input, isStreaming]);
@@ -44,8 +53,8 @@ export function DemoConsole() {
     setError(null);
     setIsStreaming(true);
     setInput("");
-    setNextStep(null);
-    setQualification([]);
+    setFollowUpSuggestion(null);
+    setQualificationSignals([]);
 
     const userMessage: DemoMessage = { id: createId(), role: "lead", content: text };
     const assistantId = createId();
@@ -58,7 +67,11 @@ export function DemoConsole() {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
         },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({
+          message_text: text,
+          conversation_id: conversationId,
+          channel: "marketing-demo",
+        }),
       });
 
       if (!response.ok || !response.body) {
@@ -88,15 +101,10 @@ export function DemoConsole() {
             continue;
           }
 
-          const payload = JSON.parse(line) as {
-            token?: string;
-            done?: boolean;
-            next_step?: string;
-            qualification?: string[];
-          };
+          const payload = JSON.parse(line) as { token?: string } & DonePayload;
 
-          const token = payload.token;
-          if (token) {
+          if (typeof payload.token === "string") {
+            const token = payload.token;
             setMessages((previous) =>
               previous.map((message) =>
                 message.id === assistantId
@@ -107,8 +115,9 @@ export function DemoConsole() {
           }
 
           if (payload.done) {
-            setNextStep(payload.next_step || null);
-            setQualification(payload.qualification || []);
+            setConversationId(payload.conversation_id || null);
+            setFollowUpSuggestion(payload.follow_up_suggestion || null);
+            setQualificationSignals(payload.qualification_signals || []);
           }
         }
       }
@@ -129,12 +138,28 @@ export function DemoConsole() {
     await sendMessage(input);
   }
 
+  function resetConversation() {
+    setConversationId(null);
+    setFollowUpSuggestion(null);
+    setQualificationSignals([]);
+    setMessages([
+      {
+        id: createId(),
+        role: "agent",
+        content:
+          "Conversa reiniciada. Traga um novo cenario comercial e eu abro outra sessao publica no backend para testar memoria e condução.",
+      },
+    ]);
+    setInput(starterPrompts[0]);
+    setError(null);
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
       <section className="rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(8,14,27,0.92),rgba(12,18,32,0.94))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] md:p-6">
         <div className="flex items-center justify-between gap-3 rounded-[20px] border border-white/10 bg-black/20 px-4 py-3 text-xs text-white/55">
-          <span>Demo publica / streaming</span>
-          <span>{isStreaming ? "ao vivo" : "pronta"}</span>
+          <span>Demo publica / backend real</span>
+          <span>{isStreaming ? "ao vivo" : conversationId ? `sessao ${conversationId.slice(0, 8)}` : "pronta"}</span>
         </div>
 
         <div className="mt-4 min-h-[360px] space-y-4 rounded-[26px] border border-white/8 bg-[rgba(255,255,255,0.03)] p-4">
@@ -175,15 +200,25 @@ export function DemoConsole() {
               </button>
             ))}
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs text-white/45">Essa demo publica e roteirizada para mostrar experiencia de venda e ritmo de conversa.</p>
-            <button
-              type="submit"
-              disabled={!canSend}
-              className="rounded-full bg-[#ff875a] px-5 py-2.5 text-sm font-semibold text-black disabled:opacity-60"
-            >
-              {isStreaming ? "Transmitindo..." : "Rodar demo"}
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-white/45">Esta demo usa o backend publico do MVP, persiste a conversa e reaproveita a sessao para testar memoria.</p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={resetConversation}
+                disabled={isStreaming}
+                className="rounded-full border border-white/10 px-4 py-2 text-sm text-white/75 transition hover:bg-white/5 disabled:opacity-60"
+              >
+                Nova sessao
+              </button>
+              <button
+                type="submit"
+                disabled={!canSend}
+                className="rounded-full bg-[#ff875a] px-5 py-2.5 text-sm font-semibold text-black disabled:opacity-60"
+              >
+                {isStreaming ? "Transmitindo..." : "Rodar demo"}
+              </button>
+            </div>
           </div>
         </form>
       </section>
@@ -191,12 +226,12 @@ export function DemoConsole() {
       <aside className="space-y-4">
         <section className="rounded-[28px] border border-white/10 bg-white/5 p-5">
           <p className="text-[11px] uppercase tracking-[0.26em] text-[#7ad2ff]">Leitura comercial</p>
-          <h3 className="mt-3 text-2xl font-semibold text-white">O que a demo enfatiza</h3>
+          <h3 className="mt-3 text-2xl font-semibold text-white">O que a demo mede</h3>
           <ul className="mt-4 space-y-3 text-sm leading-7 text-white/70">
             <li>Diagnostico antes de oferta.</li>
             <li>Objecao respondida com processo, nao com empilhamento de texto.</li>
-            <li>Resposta sempre encerrando com proxima acao clara.</li>
-            <li>Tom consultivo com direcao de fechamento.</li>
+            <li>Resposta encerrando com proxima acao clara.</li>
+            <li>Memoria reaproveitada entre mensagens da mesma sessao.</li>
           </ul>
         </section>
 
@@ -204,14 +239,14 @@ export function DemoConsole() {
           <p className="text-[11px] uppercase tracking-[0.26em] text-[#ffb86a]">Sinais detectados</p>
           <div className="mt-4 space-y-3">
             <div className="rounded-[22px] border border-white/10 bg-black/20 p-4">
-              <p className="text-[11px] uppercase tracking-wide text-white/35">Proximo passo</p>
-              <p className="mt-2 text-sm text-white/78">{nextStep || "Aguardando uma rodada de demo."}</p>
+              <p className="text-[11px] uppercase tracking-wide text-white/35">Follow-up sugerido</p>
+              <p className="mt-2 text-sm text-white/78">{followUpSuggestion || "Aguardando uma rodada de demo."}</p>
             </div>
             <div className="rounded-[22px] border border-white/10 bg-black/20 p-4">
               <p className="text-[11px] uppercase tracking-wide text-white/35">Qualificacao puxada</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {qualification.length > 0 ? (
-                  qualification.map((item) => (
+                {qualificationSignals.length > 0 ? (
+                  qualificationSignals.map((item) => (
                     <span key={item} className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/78">
                       {item}
                     </span>
