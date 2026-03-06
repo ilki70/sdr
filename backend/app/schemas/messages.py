@@ -9,6 +9,7 @@ class MessageSimulateRequest(BaseModel):
     lead_id: str | None = Field(default=None, max_length=36)
     conversation_id: str | None = Field(default=None, max_length=36)
     channel: str = Field(default="chatwoot", max_length=24)
+    attachment_context: list[str] = Field(default_factory=list)
 
 
 class MessageSimulateResponse(BaseModel):

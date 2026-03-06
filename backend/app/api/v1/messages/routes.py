@@ -48,6 +48,7 @@ async def _prepare_state(
         conversation_id=conversation.id,
         channel=payload.channel,
         message_text=payload.message_text,
+        attachment_context=payload.attachment_context,
         conversation_history=[
             {
                 "role": "assistant" if message.sender_type == "assistant" else "user",

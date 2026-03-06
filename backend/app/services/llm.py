@@ -1,5 +1,6 @@
 import logging
 import json
+import base64
 from functools import lru_cache
 from typing import Any
 
@@ -126,13 +127,72 @@ async def judge_sales_reply(
         return _heuristic_judge(user_message, assistant_reply)
 
 
-async def transcribe_audio_stub(file_ref: str) -> str:
+async def transcribe_audio_bytes(
+    file_bytes: bytes,
+    mime_type: str = "audio/ogg",
+    file_name: str = "audio-message.ogg",
+) -> str:
+    if not file_bytes:
+        return ""
     if not settings.openai_api_key:
-        return f"transcription pending for {file_ref}"
-    return f"Transcricao (stub) habilitada para {file_ref}."
+        return f"Transcricao pendente para {file_name}."
+    try:
+        client = _get_client()
+        response = await client.audio.transcriptions.create(
+            model="gpt-4o-mini-transcribe",
+            file=(file_name, file_bytes, mime_type),
+            response_format="text",
+            language="pt",
+            temperature=0,
+        )
+        if isinstance(response, str):
+            return response.strip()
+        if hasattr(response, "text") and isinstance(response.text, str):
+            return response.text.strip()
+        return ""
+    except OpenAIError as exc:
+        logger.exception("openai_audio_transcription_failed", extra={"error": str(exc)})
+        return ""
 
 
-async def analyze_image_stub(file_ref: str) -> str:
+async def analyze_image_bytes(
+    file_bytes: bytes,
+    mime_type: str = "image/jpeg",
+    prompt: str | None = None,
+) -> str:
+    if not file_bytes:
+        return ""
     if not settings.openai_api_key:
-        return f"image analysis pending for {file_ref}"
-    return f"Analise de imagem (stub) habilitada para {file_ref}."
+        return "Analise de imagem pendente."
+    try:
+        client = _get_client()
+        data_url = f"data:{mime_type};base64,{base64.b64encode(file_bytes).decode('utf-8')}"
+        response = await client.responses.create(
+            model=settings.openai_model,
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": prompt
+                            or (
+                                "Descreva a imagem em portugues do Brasil com foco no que ajuda um vendedor. "
+                                "Extraia produto, modelo, ano, faixa de valor aparente, documento ou informacao comercial visivel. "
+                                "Se nao der para afirmar algo, diga explicitamente."
+                            ),
+                        },
+                        {
+                            "type": "input_image",
+                            "image_url": data_url,
+                        },
+                    ],
+                }
+            ],
+            temperature=0.2,
+        )
+        output_text = getattr(response, "output_text", "")
+        return output_text.strip() if isinstance(output_text, str) else ""
+    except OpenAIError as exc:
+        logger.exception("openai_image_analysis_failed", extra={"error": str(exc)})
+        return ""

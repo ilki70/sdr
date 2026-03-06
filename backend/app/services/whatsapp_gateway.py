@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -19,6 +20,7 @@ from app.schemas.whatsapp import (
     WhatsAppInboundResponse,
     WhatsAppSessionStatusResponse,
 )
+from app.services.llm import analyze_image_bytes, transcribe_audio_bytes
 from app.services.messages import list_recent_conversation_messages, save_message
 
 settings = get_settings()
@@ -37,6 +39,55 @@ def _clean_phone(sender_id: str) -> str:
 
 def _gateway_headers() -> dict[str, str]:
     return {"X-WhatsApp-Gateway-Secret": settings.whatsapp_gateway_secret}
+
+
+def _decode_media_base64(payload: WhatsAppInboundRequest) -> bytes:
+    if not payload.media_base64:
+        return b""
+    try:
+        return base64.b64decode(payload.media_base64, validate=True)
+    except ValueError:
+        return b""
+
+
+async def _build_attachment_context(payload: WhatsAppInboundRequest) -> list[str]:
+    media_bytes = _decode_media_base64(payload)
+    if not media_bytes:
+        return []
+
+    summaries: list[str] = []
+    mime_type = payload.media_mime_type or "application/octet-stream"
+    media_kind = (payload.media_kind or payload.message_type or "media").lower()
+
+    if payload.media_caption:
+        summaries.append(f"Legenda enviada pelo lead: {payload.media_caption.strip()}")
+
+    if media_kind == "audio":
+        transcription = await transcribe_audio_bytes(
+            media_bytes,
+            mime_type=mime_type,
+            file_name=payload.media_filename or "whatsapp-audio",
+        )
+        if transcription:
+            summaries.append(f"Transcricao do audio: {transcription}")
+    elif media_kind == "image":
+        analysis = await analyze_image_bytes(media_bytes, mime_type=mime_type)
+        if analysis:
+            summaries.append(f"Leitura da imagem: {analysis}")
+
+    return summaries
+
+
+def _build_effective_message_text(payload: WhatsAppInboundRequest, attachment_context: list[str]) -> str:
+    parts = [payload.message_text.strip()]
+    if payload.media_caption:
+        parts.append(f"Legenda da midia: {payload.media_caption.strip()}")
+    parts.extend(item.strip() for item in attachment_context if item.strip())
+    combined = "\n".join(part for part in parts if part)
+    if combined:
+        return combined
+    media_kind = payload.media_kind or payload.message_type or "mensagem"
+    return f"O lead enviou uma {media_kind} sem texto."
 
 
 async def get_whatsapp_integration_or_none(db: AsyncSession, tenant_id: str) -> ChannelIntegration | None:
@@ -297,13 +348,16 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
     lead = await _ensure_whatsapp_lead(db, payload, phone)
     conversation = await _ensure_whatsapp_conversation(db, payload, lead)
     history = await _load_history_for_agent(db, payload.tenant_id, conversation.id)
+    attachment_context = await _build_attachment_context(payload)
+    effective_message_text = _build_effective_message_text(payload, attachment_context)
 
     state = AgentState(
         tenant_id=payload.tenant_id,
         lead_id=lead.id,
         conversation_id=conversation.id,
         channel="whatsapp",
-        message_text=payload.message_text,
+        message_text=effective_message_text,
+        attachment_context=attachment_context,
         conversation_history=history,
     )
     state = await run_sales_agent(state)
@@ -314,12 +368,19 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
         conversation_id=conversation.id,
         sender_type="lead",
         direction="inbound",
-        content=payload.message_text,
+        content=effective_message_text,
         external_message_id=payload.message_id,
         metadata_json={
             "source": "whatsapp_gateway",
             "chat_id": payload.chat_id,
             "sender_id": payload.sender_id,
+            "message_type": payload.message_type,
+            "media_kind": payload.media_kind,
+            "media_mime_type": payload.media_mime_type,
+            "media_filename": payload.media_filename,
+            "media_caption": payload.media_caption,
+            "attachment_context": attachment_context,
+            "original_message_text": payload.message_text,
         },
     )
     await save_message(
@@ -355,6 +416,6 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
         lead_id=lead.id,
         conversation_id=conversation.id,
         reply_text=state.draft_reply,
-        reply_fragments=state.reply_fragments,
+        reply_fragments=state.reply_fragments or [state.draft_reply.strip()],
         follow_up_suggestion=state.follow_up_suggestion,
     )

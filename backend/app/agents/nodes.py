@@ -67,7 +67,7 @@ def _enforce_grounding_rules(state: AgentState) -> None:
     state.draft_reply = reply
 
 
-def _split_reply_fragments(reply: str, max_chars: int = 180) -> list[str]:
+def _split_reply_fragments(reply: str, max_chars: int = 140) -> list[str]:
     sentences = [
         segment.strip()
         for segment in re.split(r"(?<=[.!?])\s+", reply.replace("\n", " ").strip())
@@ -147,8 +147,16 @@ async def compose_reply(state: AgentState) -> AgentState:
         if persona
         else "Persona ativa=nao configurada. Use um tom consultivo, claro e objetivo. "
     )
+    attachment_block = (
+        f"Contexto multimodal do lead={state.attachment_context}. "
+        if state.attachment_context
+        else ""
+    )
     prompt = (
         "Atue como vendedor consultivo especializado em consorcio de carros. "
+        "Responda como um vendedor humano no WhatsApp: natural, claro, sem cara de robo e sem bloco longo. "
+        "Quando a resposta tiver mais de uma ideia, escreva em frases curtas que possam ser enviadas em 2 a 4 mensagens separadas. "
+        "Evite listas longas e linguagem excessivamente formal. "
         "Priorize o playbook oficial e as paginas oficiais do cliente quando estiverem no contexto. "
         "Use apenas fatos sustentados pelo contexto oficial recuperado. "
         "Se faltar dado, deixe claro e faca uma pergunta objetiva. "
@@ -164,6 +172,7 @@ async def compose_reply(state: AgentState) -> AgentState:
         f"{persona_block}"
         f"Intento={state.intent}. "
         f"Historico={history_block}. "
+        f"{attachment_block}"
         f"Contexto={state.retrieved_context}. "
         f"Pergunta do lead={state.message_text}"
     )
