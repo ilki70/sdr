@@ -8,6 +8,7 @@ Plataforma SaaS para operacao comercial com agentes de IA focados em qualificaca
 - Backend FastAPI com auth por sessao via proxy Next.js.
 - RAG com ingestao de URL, upload e indexacao em Qdrant.
 - Laboratorio de simulacao com caso VINAC e avaliacao automatica.
+- Gateway WhatsApp em Go com `whatsmeow`, QR code no dashboard e sessao persistente.
 
 ## Como o produto funciona
 O produto tem dois modos de uso complementares:
@@ -76,7 +77,11 @@ Fluxo recomendado para usar o MVP do jeito certo:
 
 ### Dashboard
 - Rota: `/dashboard`
-- Objetivo: acompanhar setup do tenant e sinais de operacao comercial.
+- Objetivo: acompanhar setup do tenant, sinais de operacao comercial e o pareamento do WhatsApp por QR code.
+
+### WhatsApp Gateway
+- Pasta: `services/whatsapp-gateway`
+- Objetivo: manter a sessao do dispositivo, exibir QR code e encaminhar mensagens do WhatsApp para o backend responder com o agente.
 
 ## Fluxos tecnicos
 
@@ -102,6 +107,14 @@ Fluxo recomendado para usar o MVP do jeito certo:
 1. Frontend chama `/api/proxy/dashboard/overview`.
 2. Backend agrega metricas do tenant.
 3. O frontend so renderiza; a logica de contagem fica centralizada no backend.
+
+### WhatsApp
+1. Dashboard chama `/api/proxy/whatsapp/bootstrap` para criar/configurar o canal.
+2. Dashboard chama `/api/proxy/whatsapp/session/connect` para gerar o QR code.
+3. O gateway Go abre a sessao `whatsmeow` e persiste a credencial do dispositivo.
+4. Mensagens recebidas sao enviadas para `/api/v1/whatsapp/inbound`.
+5. O backend processa com o agente e devolve o texto de resposta.
+6. O gateway envia a resposta automaticamente ao lead no WhatsApp.
 
 ## Enderecos locais
 - Landing: `http://127.0.0.1:3000/`
@@ -144,14 +157,20 @@ Se o ambiente estiver corrompido:
 - Senha: `12345678`
 - Tenant: `tenant-lab`
 
+## Referencias oficiais do WhatsApp
+- Repositorio `whatsmeow`: https://github.com/tulir/whatsmeow
+- API docs `whatsmeow`: https://pkg.go.dev/go.mau.fi/whatsmeow
+
 ## Validacoes importantes
 - `python -m compileall backend`
 - `npm run typecheck`
 - `npm run build`
+- `go build ./...` em `services/whatsapp-gateway`
 
 ## Documentacao complementar
 - Logica de uso detalhada: [docs/project-usage.md](C:/Users/ilki/OneDrive/Desktop/Agente%20Vendedor/docs/project-usage.md)
 - Plano de implementacao: [docs/implementation-plan.md](C:/Users/ilki/OneDrive/Desktop/Agente%20Vendedor/docs/implementation-plan.md)
+- Gateway WhatsApp: [docs/whatsapp-gateway.md](C:/Users/ilki/OneDrive/Desktop/Agente%20Vendedor/docs/whatsapp-gateway.md)
 - PRD backend: [docs/prd-backend.md](C:/Users/ilki/OneDrive/Desktop/Agente%20Vendedor/docs/prd-backend.md)
 - PRD frontend: [docs/prd-frontend.md](C:/Users/ilki/OneDrive/Desktop/Agente%20Vendedor/docs/prd-frontend.md)
 

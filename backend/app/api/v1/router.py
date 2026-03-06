@@ -12,6 +12,7 @@ from app.api.v1.products.routes import router as products_router
 from app.api.v1.integrations.routes import router as integrations_router
 from app.api.v1.sales.routes import router as sales_router
 from app.api.v1.tenants.routes import router as tenants_router
+from app.api.v1.whatsapp.routes import router as whatsapp_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth_router)
@@ -23,6 +24,7 @@ api_router.include_router(personas_router)
 api_router.include_router(dashboard_router)
 api_router.include_router(knowledge_router)
 api_router.include_router(integrations_router)
+api_router.include_router(whatsapp_router)
 api_router.include_router(commissions_router)
 api_router.include_router(messages_router)
 api_router.include_router(sales_router)

@@ -143,7 +143,7 @@ Use quando:
 ### Integrations
 Essa tela prepara a ponte com canais reais.
 
-No estado atual, ela organiza o setup e o controle das integracoes. O proximo salto util e Chatwoot real via webhook.
+No estado atual, ela organiza o setup e o controle das integracoes. O dashboard ja passou a controlar o pareamento do WhatsApp via QR code usando um gateway Go com `whatsmeow`.
 
 ## 6. Logica do Agent Lab
 O `Agent Lab` e o ambiente de homologacao do agente.
@@ -213,7 +213,8 @@ Isso e o que permite gerar metricas operacionais depois.
 6. abrir `Agent Lab`
 7. simular conversa
 8. abrir `Dashboard`
-9. conferir sinais de lead/conversa/handoff
+9. criar o canal WhatsApp e gerar o QR code
+10. conferir sinais de lead/conversa/handoff
 
 ### Teste de grounding
 Use casos com resposta objetiva, como VINAC:
@@ -231,6 +232,7 @@ Se o agente errar fato objetivo:
 - score de lead e handoff mais ricos
 - regressao automatica bloqueando respostas fora do playbook
 - automacao total do funil publico ate canal real
+- multiplas sessoes WhatsApp por gateway
 
 ## 10. Resumo pratico
 Se for usar o sistema hoje, a sequencia correta e:

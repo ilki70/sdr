@@ -38,6 +38,9 @@ backend/uploads/
 backend/*.db
 backend/*.sqlite3
 frontend/.turbo/
+services/whatsapp-gateway/data/
+services/whatsapp-gateway/*.exe
+services/whatsapp-gateway/services/
 
 # Local lab artifacts
 tmp_vinac_*.html

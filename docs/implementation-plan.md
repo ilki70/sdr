@@ -13,12 +13,15 @@
 - Landing publica com demo conectada ao backend real.
 - Captura de lead publica persistida no backend.
 - Laboratorio VINAC com avaliacao automatica.
+- Gateway WhatsApp em Go com `whatsmeow`, QR no dashboard e sessao persistente.
+- Inbound WhatsApp processado pelo agente e resposta automatica devolvida pelo gateway.
 
 ### Em evolucao
 - Integracao Chatwoot real por webhook.
 - Score de lead e motivo de handoff.
 - Regressao automatica da demo publica.
 - Fechamento do fluxo omnichannel ponta a ponta.
+- Suporte a multiplos canais WhatsApp por gateway.
 
 ### Como ler este plano
 - Os batches abaixo misturam itens ja entregues e itens futuros.
