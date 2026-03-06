@@ -1,10 +1,12 @@
 import logging
 import json
 import base64
+import io
 from functools import lru_cache
 from typing import Any
 
 from openai import AsyncOpenAI, OpenAIError
+from pypdf import PdfReader
 
 from app.core.config import get_settings
 
@@ -131,6 +133,7 @@ async def transcribe_audio_bytes(
     file_bytes: bytes,
     mime_type: str = "audio/ogg",
     file_name: str = "audio-message.ogg",
+    prompt: str | None = None,
 ) -> str:
     if not file_bytes:
         return ""
@@ -143,6 +146,7 @@ async def transcribe_audio_bytes(
             file=(file_name, file_bytes, mime_type),
             response_format="text",
             language="pt",
+            prompt=prompt or "Contexto comercial de consorcio de carros no Brasil. Termos frequentes: VINAC, consorcio, carta de credito, parcela, proposta, Corolla Cross, seminovo, adesao.",
             temperature=0,
         )
         if isinstance(response, str):
@@ -196,3 +200,67 @@ async def analyze_image_bytes(
     except OpenAIError as exc:
         logger.exception("openai_image_analysis_failed", extra={"error": str(exc)})
         return ""
+
+
+def _extract_pdf_text(file_bytes: bytes) -> str:
+    pages: list[str] = []
+    try:
+        reader = PdfReader(io.BytesIO(file_bytes))
+        for page in reader.pages[:12]:
+            extracted = (page.extract_text() or "").strip()
+            if extracted:
+                pages.append(extracted)
+    except Exception:
+        return ""
+    return "\n".join(pages).strip()
+
+
+async def analyze_document_bytes(
+    file_bytes: bytes,
+    mime_type: str = "application/pdf",
+    file_name: str = "documento.pdf",
+) -> str:
+    if not file_bytes:
+        return ""
+
+    if mime_type.startswith("image/"):
+        return await analyze_image_bytes(
+            file_bytes,
+            mime_type=mime_type,
+            prompt=(
+                "Leia esta imagem de documento em portugues do Brasil. "
+                "Extraia tipo de documento, valores, parcelas, datas, nome do cliente, produto e qualquer proximo passo comercial visivel. "
+                "Nao invente campos nao visiveis."
+            ),
+        )
+
+    extracted_text = ""
+    if "pdf" in mime_type or file_name.lower().endswith(".pdf"):
+        extracted_text = _extract_pdf_text(file_bytes)
+    elif mime_type.startswith("text/") or file_name.lower().endswith((".txt", ".md")):
+        extracted_text = file_bytes.decode("utf-8", errors="ignore").strip()
+
+    if not extracted_text:
+        return ""
+
+    if not settings.openai_api_key:
+        return extracted_text[:1200]
+
+    try:
+        client = _get_client()
+        response = await client.responses.create(
+            model=settings.openai_model,
+            input=(
+                "Leia o texto extraido de um documento comercial e produza um resumo guiado em portugues do Brasil. "
+                "Extraia, se existirem: tipo de documento, nome do cliente, produto, credito, valor total, valor de parcela, vencimento, taxa, observacoes e proximo passo. "
+                "Se alguma informacao nao estiver presente, diga isso explicitamente.\n\n"
+                f"Arquivo: {file_name}\n"
+                f"Texto extraido:\n{extracted_text[:12000]}"
+            ),
+            temperature=0.1,
+        )
+        output_text = getattr(response, "output_text", "")
+        return output_text.strip() if isinstance(output_text, str) else extracted_text[:1200]
+    except OpenAIError as exc:
+        logger.exception("openai_document_analysis_failed", extra={"error": str(exc)})
+        return extracted_text[:1200]

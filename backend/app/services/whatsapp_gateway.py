@@ -20,7 +20,7 @@ from app.schemas.whatsapp import (
     WhatsAppInboundResponse,
     WhatsAppSessionStatusResponse,
 )
-from app.services.llm import analyze_image_bytes, transcribe_audio_bytes
+from app.services.llm import analyze_document_bytes, analyze_image_bytes, transcribe_audio_bytes
 from app.services.messages import list_recent_conversation_messages, save_message
 
 settings = get_settings()
@@ -74,6 +74,14 @@ async def _build_attachment_context(payload: WhatsAppInboundRequest) -> list[str
         analysis = await analyze_image_bytes(media_bytes, mime_type=mime_type)
         if analysis:
             summaries.append(f"Leitura da imagem: {analysis}")
+    elif media_kind == "document":
+        analysis = await analyze_document_bytes(
+            media_bytes,
+            mime_type=mime_type,
+            file_name=payload.media_filename or "documento",
+        )
+        if analysis:
+            summaries.append(f"Leitura do documento: {analysis}")
 
     return summaries
 

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -491,6 +492,13 @@ func (m *Manager) buildInboundPayload(evt *events.Message) (InboundPayload, stri
 		payload.MediaMimeType = message.GetDocumentMessage().GetMimetype()
 		payload.MediaFilename = message.GetDocumentMessage().GetFileName()
 		payload.MediaCaption = strings.TrimSpace(message.GetDocumentMessage().GetCaption())
+		data, err := m.client.Download(context.Background(), message.GetDocumentMessage())
+		if err != nil {
+			return payload, "", fmt.Errorf("download document: %w", err)
+		}
+		if len(data) <= maxInlineMediaBytes {
+			payload.MediaBase64 = base64.StdEncoding.EncodeToString(data)
+		}
 	}
 
 	preview := payload.MessageText
@@ -587,7 +595,7 @@ func (m *Manager) forwardInbound(payload InboundPayload) {
 		}
 		lastOutboundPreview = text
 		if index < len(fragments)-1 {
-			time.Sleep(450 * time.Millisecond)
+			time.Sleep(computeTypingDelay(text))
 		}
 	}
 	m.updateStatus(func(status *SessionStatus) {
@@ -596,6 +604,24 @@ func (m *Manager) forwardInbound(payload InboundPayload) {
 		status.LastOutboundChat = payload.ChatID
 		status.LastOutboundPreview = truncate(lastOutboundPreview, 120)
 	})
+}
+
+func computeTypingDelay(text string) time.Duration {
+	compact := strings.TrimSpace(text)
+	length := len([]rune(compact))
+	base := 350 + length*14
+	if base < 400 {
+		base = 400
+	}
+	if base > 2200 {
+		base = 2200
+	}
+	jitter := rand.Intn(240) - 120
+	total := base + jitter
+	if total < 300 {
+		total = 300
+	}
+	return time.Duration(total) * time.Millisecond
 }
 
 func unwrapMessage(message *waProto.Message) *waProto.Message {

@@ -104,6 +104,13 @@ def _build_follow_up_suggestion(state: AgentState, persona: dict[str, str] | Non
     else:
         core = "Se quiser, eu sigo com uma simulacao guiada usando valor do bem, prazo e faixa de parcela."
 
+    if state.channel == "whatsapp":
+        if "diret" in tone or "assertiv" in tone:
+            return f"Se fizer sentido, me responde isso aqui: {core}"
+        if "premium" in tone or "sofistic" in tone:
+            return f"Para eu te orientar com precisao, me confirma: {core}"
+        return core
+
     if "diret" in tone or "assertiv" in tone:
         return f"Vamos avancar: {core}"
     if "premium" in tone or "sofistic" in tone:
@@ -157,6 +164,9 @@ async def compose_reply(state: AgentState) -> AgentState:
         "Responda como um vendedor humano no WhatsApp: natural, claro, sem cara de robo e sem bloco longo. "
         "Quando a resposta tiver mais de uma ideia, escreva em frases curtas que possam ser enviadas em 2 a 4 mensagens separadas. "
         "Evite listas longas e linguagem excessivamente formal. "
+        "Nao use saudacao longa em toda mensagem. Varie abertura, use empatia sob medida e feche com uma pergunta curta. "
+        "Se o lead mandar audio, imagem ou documento, reconheca isso de forma natural e use o conteudo interpretado sem mencionar termos tecnicos como OCR, RAG ou transcricao automatica. "
+        "Se houver leitura de documento, ajude o lead a entender valor, parcela, credito, vencimento, taxa e proximo passo. "
         "Priorize o playbook oficial e as paginas oficiais do cliente quando estiverem no contexto. "
         "Use apenas fatos sustentados pelo contexto oficial recuperado. "
         "Se faltar dado, deixe claro e faca uma pergunta objetiva. "
