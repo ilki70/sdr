@@ -95,6 +95,7 @@ func main() {
 	port := getenv("WHATSAPP_GATEWAY_PORT", "8090")
 	dataDir := getenv("WHATSAPP_GATEWAY_DATA_DIR", "data")
 	gatewaySecret := getenv("WHATSAPP_GATEWAY_SECRET", "whatsapp-gateway-local")
+	rand.Seed(time.Now().UnixNano())
 
 	manager, err := NewManager(dataDir, gatewaySecret)
 	if err != nil {
@@ -390,6 +391,9 @@ func (m *Manager) handleEvent(raw interface{}) {
 		if m.client.Store.ID != nil {
 			pairedPhone = m.client.Store.ID.User
 		}
+		if err := m.client.SendPresence(context.Background(), types.PresenceAvailable); err != nil {
+			log.Printf("failed to mark presence available: %v", err)
+		}
 		m.updateStatus(func(status *SessionStatus) {
 			status.Connected = true
 			status.SessionStatus = "connected"
@@ -580,6 +584,9 @@ func (m *Manager) forwardInbound(payload InboundPayload) {
 		fragments = []string{inboundResponse.ReplyText}
 	}
 	lastOutboundPreview := inboundResponse.ReplyText
+	if err := m.client.SendChatPresence(context.Background(), jid, types.ChatPresenceComposing, types.ChatPresenceMediaText); err != nil {
+		log.Printf("failed to send composing presence: %v", err)
+	}
 	for index, fragment := range fragments {
 		text := strings.TrimSpace(fragment)
 		if text == "" {
@@ -597,6 +604,9 @@ func (m *Manager) forwardInbound(payload InboundPayload) {
 		if index < len(fragments)-1 {
 			time.Sleep(computeTypingDelay(text))
 		}
+	}
+	if err := m.client.SendChatPresence(context.Background(), jid, types.ChatPresencePaused, types.ChatPresenceMediaText); err != nil {
+		log.Printf("failed to send paused presence: %v", err)
 	}
 	m.updateStatus(func(status *SessionStatus) {
 		status.LastEvent = "outbound_sent"

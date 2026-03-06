@@ -17,7 +17,7 @@ type PersonaVersion = {
   version_no: number;
   tone: string;
   prompt_system: string;
-  approach_rules_json: { rules?: string[] };
+  approach_rules_json: { rules?: string[]; stage_playbook?: Record<string, string> };
   objection_playbook_json: Record<string, string>;
   is_published: boolean;
   created_at: string;
@@ -49,17 +49,21 @@ export default function PersonasPage() {
   const [error, setError] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState({
     name: "Closer Consultivo",
-    description: "Persona comercial focada em qualificação e fechamento.",
+    description: "Persona comercial focada em qualificacao e fechamento.",
     tone: "consultivo e objetivo",
-    prompt_system: "Você é um vendedor consultivo, focado em clareza, qualificação e fechamento sem prometer o que não está na base oficial.",
-    approach_rules: "Faça perguntas curtas.\nUse contexto oficial.\nSempre sugira próximo passo concreto.",
+    prompt_system: "Voce e um vendedor consultivo, focado em clareza, qualificacao e fechamento sem prometer o que nao esta na base oficial.",
+    approach_rules: "Faca perguntas curtas.\nUse contexto oficial.\nSempre sugira proximo passo concreto.",
+    stage_playbook:
+      "discovery: descubra contexto, carro desejado e momento de compra\nqualification: confirme faixa de parcela, valor do bem e urgencia\nobjection: reduza friccao com fatos oficiais e exemplos claros\nclosing: conduza para proposta, contrato digital e proximo passo imediato",
     objection_playbook: "preco: reposicione pelo valor e pela previsibilidade\nconfianca: cite fonte oficial e provas documentais",
   });
   const [versionForm, setVersionForm] = useState({
     tone: "consultivo e firme",
-    prompt_system: "Você conduz o lead de forma objetiva, sustentada pela base oficial e orientada a próximo passo.",
-    approach_rules: "Valide a dor.\nQualifique renda e objetivo.\nLeve para simulação ou adesão.",
-    objection_playbook: "juros: explique que consórcio não trabalha com juros, conforme contexto oficial\norcamento: mostre faixa mínima e pergunte sobre margem",
+    prompt_system: "Voce conduz o lead de forma objetiva, sustentada pela base oficial e orientada a proximo passo.",
+    approach_rules: "Valide a dor.\nQualifique renda e objetivo.\nLeve para simulacao ou adesao.",
+    stage_playbook:
+      "discovery: entenda dor, carro e contexto de compra\nqualification: confirme credito, faixa de parcela e disponibilidade\nobjection: trate inseguranca, taxa e comparacao com financiamento\nclosing: avance para proposta, adesao e envio de documentos",
+    objection_playbook: "juros: explique que consorcio nao trabalha com juros, conforme contexto oficial\norcamento: mostre faixa minima e pergunte sobre margem",
   });
 
   async function loadPersonas() {
@@ -100,6 +104,7 @@ export default function PersonasPage() {
           tone: createForm.tone,
           prompt_system: createForm.prompt_system,
           approach_rules: createForm.approach_rules.split("\n").map((item) => item.trim()).filter(Boolean),
+          stage_playbook: parseKeyValueBlock(createForm.stage_playbook),
           objection_playbook: parseKeyValueBlock(createForm.objection_playbook),
           publish: true,
         }),
@@ -123,6 +128,7 @@ export default function PersonasPage() {
           tone: versionForm.tone,
           prompt_system: versionForm.prompt_system,
           approach_rules: versionForm.approach_rules.split("\n").map((item) => item.trim()).filter(Boolean),
+          stage_playbook: parseKeyValueBlock(versionForm.stage_playbook),
           objection_playbook: parseKeyValueBlock(versionForm.objection_playbook),
           publish: false,
         }),
@@ -130,7 +136,7 @@ export default function PersonasPage() {
       const payload = await fetchJson<PersonaDetail>(`/api/proxy/personas/${selectedPersonaId}`);
       setDetail(payload);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Falha ao criar versão.");
+      setError(cause instanceof Error ? cause.message : "Falha ao criar versao.");
     }
   }
 
@@ -157,6 +163,7 @@ export default function PersonasPage() {
           <input className="mt-3 w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={createForm.tone} onChange={(event) => setCreateForm((previous) => ({ ...previous, tone: event.target.value }))} />
           <textarea className="mt-3 min-h-[140px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={createForm.prompt_system} onChange={(event) => setCreateForm((previous) => ({ ...previous, prompt_system: event.target.value }))} />
           <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={createForm.approach_rules} onChange={(event) => setCreateForm((previous) => ({ ...previous, approach_rules: event.target.value }))} />
+          <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={createForm.stage_playbook} onChange={(event) => setCreateForm((previous) => ({ ...previous, stage_playbook: event.target.value }))} />
           <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={createForm.objection_playbook} onChange={(event) => setCreateForm((previous) => ({ ...previous, objection_playbook: event.target.value }))} />
           <button className="mt-4 w-full rounded-full bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-black" type="submit">Criar persona publicada</button>
         </form>
@@ -167,7 +174,7 @@ export default function PersonasPage() {
             {personas.map((persona) => (
               <button key={persona.id} type="button" onClick={() => setSelectedPersonaId(persona.id)} className="block w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-left">
                 <strong className="text-sm">{persona.name}</strong>
-                <p className="mt-1 text-xs text-white/50">Versão ativa: {persona.active_version_no || "-"}</p>
+                <p className="mt-1 text-xs text-white/50">Versao ativa: {persona.active_version_no || "-"}</p>
               </button>
             ))}
           </div>
@@ -178,21 +185,22 @@ export default function PersonasPage() {
         {error ? <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p> : null}
         <form onSubmit={handleCreateVersion} className="rounded-[28px] border border-white/10 bg-white/5 p-6">
           <h1 className="text-2xl font-semibold">Painel de persona/playbook</h1>
-          <p className="mt-2 text-sm text-white/70">Edite tom, prompt-base, regras comerciais e objeções sem tocar no código do agente.</p>
+          <p className="mt-2 text-sm text-white/70">Edite tom, prompt-base, regras comerciais e objecoes sem tocar no codigo do agente.</p>
           <input className="mt-4 w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={versionForm.tone} onChange={(event) => setVersionForm((previous) => ({ ...previous, tone: event.target.value }))} />
           <textarea className="mt-3 min-h-[140px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={versionForm.prompt_system} onChange={(event) => setVersionForm((previous) => ({ ...previous, prompt_system: event.target.value }))} />
           <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={versionForm.approach_rules} onChange={(event) => setVersionForm((previous) => ({ ...previous, approach_rules: event.target.value }))} />
+          <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={versionForm.stage_playbook} onChange={(event) => setVersionForm((previous) => ({ ...previous, stage_playbook: event.target.value }))} />
           <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={versionForm.objection_playbook} onChange={(event) => setVersionForm((previous) => ({ ...previous, objection_playbook: event.target.value }))} />
-          <button className="mt-4 rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-black" type="submit">Criar nova versão</button>
+          <button className="mt-4 rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-black" type="submit">Criar nova versao</button>
         </form>
 
         <section className="rounded-[28px] border border-white/10 bg-white/5 p-6">
-          <h2 className="text-xl font-semibold">Versões</h2>
+          <h2 className="text-xl font-semibold">Versoes</h2>
           <div className="mt-5 space-y-3">
             {detail?.versions.map((version) => (
               <article key={version.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <strong>v{version.version_no} • {version.tone}</strong>
+                  <strong>v{version.version_no} - {version.tone}</strong>
                   <button type="button" onClick={() => void handlePublish(version.version_no)} className="rounded-full border border-[var(--accent)]/35 px-4 py-2 text-sm text-[var(--accent)]">
                     {version.is_published ? "Publicada" : "Publicar"}
                   </button>
@@ -200,6 +208,7 @@ export default function PersonasPage() {
                 <p className="mt-2 text-xs text-white/50">{formatDateTimeSP(version.created_at)}</p>
                 <p className="mt-3 text-sm text-white/70">{version.prompt_system}</p>
                 <p className="mt-3 text-xs text-white/55">Regras: {(version.approach_rules_json.rules || []).join(" | ") || "sem regras"}</p>
+                <p className="mt-2 text-xs text-white/55">Etapas: {Object.entries(version.approach_rules_json.stage_playbook || {}).map(([key, value]) => `${key}: ${value}`).join(" | ") || "sem regras por etapa"}</p>
               </article>
             ))}
           </div>
