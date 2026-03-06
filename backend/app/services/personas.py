@@ -50,7 +50,7 @@ async def _create_persona_version(
         persona_id=persona.id,
         version_no=version_no,
         tone=payload.tone,
-        approach_rules_json={"rules": payload.approach_rules},
+        approach_rules_json={"rules": payload.approach_rules, "stage_playbook": payload.stage_playbook},
         objection_playbook_json=payload.objection_playbook,
         prompt_system=payload.prompt_system,
         is_published=payload.publish,
@@ -88,6 +88,7 @@ async def create_persona(
             tone=payload.tone,
             prompt_system=payload.prompt_system,
             approach_rules=payload.approach_rules,
+            stage_playbook=payload.stage_playbook,
             objection_playbook=payload.objection_playbook,
             publish=payload.publish,
         ),
@@ -167,6 +168,7 @@ async def get_active_persona_context(tenant_id: str) -> dict[str, str] | None:
             "tone": version.tone,
             "prompt_system": version.prompt_system,
             "approach_rules": "; ".join(version.approach_rules_json.get("rules", [])),
+            "stage_playbook": version.approach_rules_json.get("stage_playbook", {}),
             "objection_playbook": "; ".join(
                 [f"{key}: {value}" for key, value in version.objection_playbook_json.items()]
             ),

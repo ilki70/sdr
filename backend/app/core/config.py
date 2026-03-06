@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     chatwoot_base_url: str = Field(default="", alias="CHATWOOT_BASE_URL")
     chatwoot_api_token: str = Field(default="", alias="CHATWOOT_API_TOKEN")
     chatwoot_webhook_secret: str = Field(default="", alias="CHATWOOT_WEBHOOK_SECRET")
+    backend_internal_url: str = Field(default="http://127.0.0.1:8000", alias="BACKEND_INTERNAL_URL")
+    whatsapp_gateway_base_url: str = Field(default="http://127.0.0.1:8090", alias="WHATSAPP_GATEWAY_BASE_URL")
+    whatsapp_gateway_secret: str = Field(default="whatsapp-gateway-local", alias="WHATSAPP_GATEWAY_SECRET")
 
     session_secret: str = Field(default="", alias="SESSION_SECRET")
     rate_limit_default_per_min: int = Field(default=100, alias="RATE_LIMIT_DEFAULT_PER_MIN")
@@ -33,6 +36,7 @@ class Settings(BaseSettings):
     seed_admin_email: str = Field(default="admin@agentevendedor.example.com", alias="SEED_ADMIN_EMAIL")
     seed_admin_password: str = Field(default="12345678", alias="SEED_ADMIN_PASSWORD")
     seed_tenant_slug: str = Field(default="tenant-lab", alias="SEED_TENANT_SLUG")
+    public_demo_tenant_slug: str = Field(default="tenant-lab", alias="PUBLIC_DEMO_TENANT_SLUG")
     qdrant_collection_name: str = Field(default="knowledge_chunks", alias="QDRANT_COLLECTION_NAME")
     celery_task_always_eager: bool = Field(default=False, alias="CELERY_TASK_ALWAYS_EAGER")
 

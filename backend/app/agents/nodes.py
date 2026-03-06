@@ -1,5 +1,6 @@
 import re
 import unicodedata
+from typing import Any
 
 from app.agents.state import AgentState
 from app.agents.tools import tool_rag_search, tool_web_search_allowlist
@@ -67,7 +68,7 @@ def _enforce_grounding_rules(state: AgentState) -> None:
     state.draft_reply = reply
 
 
-def _split_reply_fragments(reply: str, max_chars: int = 180) -> list[str]:
+def _split_reply_fragments(reply: str, max_chars: int = 140) -> list[str]:
     sentences = [
         segment.strip()
         for segment in re.split(r"(?<=[.!?])\s+", reply.replace("\n", " ").strip())
@@ -91,7 +92,18 @@ def _split_reply_fragments(reply: str, max_chars: int = 180) -> list[str]:
     return fragments[:4]
 
 
-def _build_follow_up_suggestion(state: AgentState, persona: dict[str, str] | None) -> str:
+def _infer_funnel_stage(state: AgentState) -> str:
+    query = _fold(state.message_text)
+    if any(term in query for term in ["adesao", "contrato", "proposta", "fechar", "assin"]):
+        return "closing"
+    if any(term in query for term in ["juros", "taxa", "confi", "seguro", "vale a pena", "compensa"]):
+        return "objection"
+    if any(term in query for term in ["parcela", "orcamento", "credito", "valor", "preco"]):
+        return "qualification"
+    return "discovery"
+
+
+def _build_follow_up_suggestion(state: AgentState, persona: dict[str, Any] | None) -> str:
     tone = _fold(persona["tone"]) if persona else "consultivo"
     query = _fold(state.message_text)
 
@@ -103,6 +115,13 @@ def _build_follow_up_suggestion(state: AgentState, persona: dict[str, str] | Non
         core = "Me diga o veiculo desejado, ano e faixa de valor para eu direcionar a simulacao."
     else:
         core = "Se quiser, eu sigo com uma simulacao guiada usando valor do bem, prazo e faixa de parcela."
+
+    if state.channel == "whatsapp":
+        if "diret" in tone or "assertiv" in tone:
+            return f"Se fizer sentido, me responde isso aqui: {core}"
+        if "premium" in tone or "sofistic" in tone:
+            return f"Para eu te orientar com precisao, me confirma: {core}"
+        return core
 
     if "diret" in tone or "assertiv" in tone:
         return f"Vamos avancar: {core}"
@@ -130,6 +149,17 @@ async def retrieve_context(state: AgentState) -> AgentState:
     return state
 
 
+def _build_stage_guidance(state: AgentState, persona: dict[str, Any] | None) -> tuple[str, str]:
+    stage = _infer_funnel_stage(state)
+    if not persona:
+        return stage, ""
+    stage_playbook = persona.get("stage_playbook") or {}
+    guidance = stage_playbook.get(stage, "")
+    if not guidance:
+        return stage, ""
+    return stage, f"Guia da etapa {stage}: {guidance}. "
+
+
 async def compose_reply(state: AgentState) -> AgentState:
     history_lines = [
         f"{item['role']}: {item['content']}"
@@ -138,17 +168,32 @@ async def compose_reply(state: AgentState) -> AgentState:
     ]
     history_block = " | ".join(history_lines[-8:]) if history_lines else "sem historico anterior"
     persona = await get_active_persona_context(state.tenant_id)
+    stage_name, stage_guidance = _build_stage_guidance(state, persona)
     persona_block = (
         f"Persona ativa={persona['persona_name']}. "
         f"Tom={persona['tone']}. "
         f"Prompt base={persona['prompt_system']}. "
         f"Regras comerciais={persona['approach_rules']}. "
+        f"Regras por etapa={persona.get('stage_playbook', {})}. "
         f"Tratamento de objecoes={persona['objection_playbook']}. "
         if persona
         else "Persona ativa=nao configurada. Use um tom consultivo, claro e objetivo. "
     )
+    attachment_block = (
+        f"Contexto multimodal do lead={state.attachment_context}. "
+        if state.attachment_context
+        else ""
+    )
     prompt = (
         "Atue como vendedor consultivo especializado em consorcio de carros. "
+        "Responda como um vendedor humano no WhatsApp: natural, claro, sem cara de robo e sem bloco longo. "
+        "Quando a resposta tiver mais de uma ideia, escreva em frases curtas que possam ser enviadas em 2 a 4 mensagens separadas. "
+        "Evite listas longas e linguagem excessivamente formal. "
+        "Nao use saudacao longa em toda mensagem. Varie abertura, use empatia sob medida e feche com uma pergunta curta. "
+        "Se o lead mandar audio, imagem ou documento, reconheca isso de forma natural e use o conteudo interpretado sem mencionar termos tecnicos como OCR, RAG ou transcricao automatica. "
+        "Se houver leitura de documento, ajude o lead a entender valor, parcela, credito, vencimento, taxa e proximo passo. "
+        "Quando imagem ou documento trouxer numeros importantes, mencione explicitamente os principais valores lidos, como valor do bem, credito ou parcela. "
+        "A etapa do funil deve guiar a resposta: discovery para entender contexto, qualification para confirmar orcamento e produto, objection para reduzir friccao e closing para orientar a proposta. "
         "Priorize o playbook oficial e as paginas oficiais do cliente quando estiverem no contexto. "
         "Use apenas fatos sustentados pelo contexto oficial recuperado. "
         "Se faltar dado, deixe claro e faca uma pergunta objetiva. "
@@ -162,8 +207,11 @@ async def compose_reply(state: AgentState) -> AgentState:
         "Se o orcamento estiver abaixo da faixa minima do site, reconheca isso de forma consultiva, cite a faixa minima oficial, "
         "evite encerrar a conversa cedo e faca uma pergunta objetiva sobre carro desejado, prazo ou margem para aproximar a parcela minima. "
         f"{persona_block}"
+        f"Etapa atual={stage_name}. "
+        f"{stage_guidance}"
         f"Intento={state.intent}. "
         f"Historico={history_block}. "
+        f"{attachment_block}"
         f"Contexto={state.retrieved_context}. "
         f"Pergunta do lead={state.message_text}"
     )

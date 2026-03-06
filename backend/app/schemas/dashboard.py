@@ -30,9 +30,14 @@ class DashboardLatestEvaluationResponse(BaseModel):
 
 
 class DashboardOverviewResponse(BaseModel):
+    lead_count: int
+    engaged_lead_count: int
     client_count: int
     product_count: int
     conversation_count: int
+    qualification_started_count: int
+    handoff_ready_count: int
+    avg_messages_per_conversation: float
     active_rule_count: int
     active_integration_count: int
     sales_count: int

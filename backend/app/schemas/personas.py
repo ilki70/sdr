@@ -11,6 +11,7 @@ class PersonaCreateRequest(BaseModel):
     tone: str = Field(min_length=2, max_length=80)
     prompt_system: str = Field(min_length=20)
     approach_rules: list[str] = Field(default_factory=list)
+    stage_playbook: dict[str, str] = Field(default_factory=dict)
     objection_playbook: dict[str, str] = Field(default_factory=dict)
     publish: bool = True
 
@@ -19,6 +20,7 @@ class PersonaVersionCreateRequest(BaseModel):
     tone: str = Field(min_length=2, max_length=80)
     prompt_system: str = Field(min_length=20)
     approach_rules: list[str] = Field(default_factory=list)
+    stage_playbook: dict[str, str] = Field(default_factory=dict)
     objection_playbook: dict[str, str] = Field(default_factory=dict)
     publish: bool = False
 

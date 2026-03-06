@@ -8,6 +8,7 @@ class AgentState:
     conversation_id: str | None = None
     channel: str = "chatwoot"
     message_text: str = ""
+    attachment_context: list[str] = field(default_factory=list)
     intent: str = "unknown"
     lead_stage: str = "new"
     objections: list[str] = field(default_factory=list)
