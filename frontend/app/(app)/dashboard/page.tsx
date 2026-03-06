@@ -56,6 +56,13 @@ type WhatsAppGatewayStatus = {
   qr_code_text: string | null;
   last_event: string | null;
   last_error: string | null;
+  last_inbound_at: string | null;
+  last_inbound_chat: string | null;
+  last_inbound_preview: string | null;
+  last_callback_status: string | null;
+  last_outbound_at: string | null;
+  last_outbound_chat: string | null;
+  last_outbound_preview: string | null;
   updated_at: string | null;
 };
 
@@ -218,6 +225,11 @@ export default function DashboardPage() {
               <p>Conectado: {whatsApp?.gateway.connected ? "sim" : "nao"}</p>
               <p>Numero pareado: {whatsApp?.gateway.paired_phone || "aguardando"}</p>
               <p>Ultimo evento: {whatsApp?.gateway.last_event || "-"}</p>
+              <p>Ultimo callback: {whatsApp?.gateway.last_callback_status || "-"}</p>
+              <p>Ultimo inbound: {whatsApp?.gateway.last_inbound_at ? formatDateTimeSP(whatsApp.gateway.last_inbound_at) : "-"}</p>
+              <p>Preview inbound: {whatsApp?.gateway.last_inbound_preview || "-"}</p>
+              <p>Ultimo outbound: {whatsApp?.gateway.last_outbound_at ? formatDateTimeSP(whatsApp.gateway.last_outbound_at) : "-"}</p>
+              <p>Preview outbound: {whatsApp?.gateway.last_outbound_preview || "-"}</p>
               <p>Atualizado: {whatsApp?.gateway.updated_at ? formatDateTimeSP(whatsApp.gateway.updated_at) : "-"}</p>
             </div>
             {whatsAppError ? <p className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{whatsAppError}</p> : null}

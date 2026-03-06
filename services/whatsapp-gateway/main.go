@@ -34,14 +34,21 @@ type GatewayConfig struct {
 }
 
 type SessionStatus struct {
-    Connected     bool      `json:"connected"`
-    SessionStatus string    `json:"session_status"`
-    PairedPhone   string    `json:"paired_phone,omitempty"`
-    QRCodeDataURL string    `json:"qr_code_data_url,omitempty"`
-    QRCodeText    string    `json:"qr_code_text,omitempty"`
-    LastEvent     string    `json:"last_event,omitempty"`
-    LastError     string    `json:"last_error,omitempty"`
-    UpdatedAt     time.Time `json:"updated_at,omitempty"`
+    Connected               bool      `json:"connected"`
+    SessionStatus           string    `json:"session_status"`
+    PairedPhone             string    `json:"paired_phone,omitempty"`
+    QRCodeDataURL           string    `json:"qr_code_data_url,omitempty"`
+    QRCodeText              string    `json:"qr_code_text,omitempty"`
+    LastEvent               string    `json:"last_event,omitempty"`
+    LastError               string    `json:"last_error,omitempty"`
+    LastInboundAt           time.Time `json:"last_inbound_at,omitempty"`
+    LastInboundChat         string    `json:"last_inbound_chat,omitempty"`
+    LastInboundPreview      string    `json:"last_inbound_preview,omitempty"`
+    LastCallbackStatus      string    `json:"last_callback_status,omitempty"`
+    LastOutboundAt          time.Time `json:"last_outbound_at,omitempty"`
+    LastOutboundChat        string    `json:"last_outbound_chat,omitempty"`
+    LastOutboundPreview     string    `json:"last_outbound_preview,omitempty"`
+    UpdatedAt               time.Time `json:"updated_at,omitempty"`
 }
 
 type InboundPayload struct {
@@ -138,8 +145,29 @@ func NewManager(dataDir string, gatewaySecret string) (*Manager, error) {
     if client.Store.ID != nil {
         manager.status.PairedPhone = client.Store.ID.User
         manager.status.SessionStatus = "stored_session"
+        go manager.reconnectStoredSession()
     }
     return manager, nil
+}
+
+func (m *Manager) reconnectStoredSession() {
+    time.Sleep(1500 * time.Millisecond)
+    if m.client.Store.ID == nil || m.client.IsConnected() {
+        return
+    }
+    m.updateStatus(func(status *SessionStatus) {
+        status.SessionStatus = "reconnecting"
+        status.LastError = ""
+        status.QRCodeDataURL = ""
+        status.QRCodeText = ""
+    })
+    if err := m.client.Connect(); err != nil {
+        m.updateStatus(func(status *SessionStatus) {
+            status.SessionStatus = "error"
+            status.LastError = err.Error()
+            status.LastEvent = "reconnect_failed"
+        })
+    }
 }
 
 func (m *Manager) loadConfig() error {
@@ -233,6 +261,18 @@ func (m *Manager) handleConnect(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    if m.client.IsConnected() {
+        m.updateStatus(func(status *SessionStatus) {
+            status.Connected = true
+            status.SessionStatus = "connected"
+            status.LastError = ""
+            status.QRCodeDataURL = ""
+            status.QRCodeText = ""
+        })
+        writeJSON(w, http.StatusOK, m.snapshotStatus())
+        return
+    }
+
     if m.client.Store.ID == nil {
         qrChan, err := m.client.GetQRChannel(context.Background())
         if err != nil {
@@ -240,10 +280,20 @@ func (m *Manager) handleConnect(w http.ResponseWriter, r *http.Request) {
             return
         }
         go m.consumeQR(qrChan)
+    } else {
+        m.updateStatus(func(status *SessionStatus) {
+            status.QRCodeDataURL = ""
+            status.QRCodeText = ""
+            status.LastEvent = "reconnecting_stored_session"
+        })
     }
 
     m.updateStatus(func(status *SessionStatus) {
-        status.SessionStatus = "connecting"
+        if m.client.Store.ID == nil {
+            status.SessionStatus = "connecting"
+        } else {
+            status.SessionStatus = "reconnecting"
+        }
         status.LastError = ""
     })
 
@@ -251,6 +301,10 @@ func (m *Manager) handleConnect(w http.ResponseWriter, r *http.Request) {
         m.updateStatus(func(status *SessionStatus) {
             status.SessionStatus = "error"
             status.LastError = err.Error()
+            if m.client.Store.ID != nil {
+                status.QRCodeDataURL = ""
+                status.QRCodeText = ""
+            }
         })
         writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
         return
@@ -267,6 +321,10 @@ func (m *Manager) handleDisconnect(w http.ResponseWriter, r *http.Request) {
     m.updateStatus(func(status *SessionStatus) {
         status.Connected = false
         status.SessionStatus = "disconnected"
+        status.QRCodeDataURL = ""
+        status.QRCodeText = ""
+        status.LastError = ""
+        status.LastEvent = "manual_disconnect"
     })
     writeJSON(w, http.StatusOK, m.snapshotStatus())
 }
@@ -337,18 +395,33 @@ func (m *Manager) handleEvent(raw interface{}) {
             status.Connected = false
             status.SessionStatus = "logged_out"
             status.LastEvent = "logged_out"
+            status.QRCodeDataURL = ""
+            status.QRCodeText = ""
         })
     case *events.Message:
         if evt.Info.IsFromMe {
             return
         }
         if evt.Info.Chat.Server != types.DefaultUserServer {
+            m.updateStatus(func(status *SessionStatus) {
+                status.LastEvent = "ignored_non_direct_message"
+            })
             return
         }
         messageText := extractText(evt.Message)
         if strings.TrimSpace(messageText) == "" {
+            m.updateStatus(func(status *SessionStatus) {
+                status.LastEvent = "ignored_empty_message"
+            })
             return
         }
+        m.updateStatus(func(status *SessionStatus) {
+            status.LastEvent = "inbound_message"
+            status.LastInboundAt = time.Now().UTC()
+            status.LastInboundChat = evt.Info.Chat.String()
+            status.LastInboundPreview = truncate(messageText, 120)
+            status.LastCallbackStatus = "pending"
+        })
         go m.forwardInbound(evt, messageText)
     }
 }
@@ -394,22 +467,37 @@ func (m *Manager) forwardInbound(evt *events.Message, messageText string) {
 
     response, err := http.DefaultClient.Do(req)
     if err != nil {
-        m.updateStatus(func(status *SessionStatus) { status.LastError = err.Error() })
+        m.updateStatus(func(status *SessionStatus) {
+            status.LastError = err.Error()
+            status.LastCallbackStatus = "http_error"
+        })
         return
     }
     defer response.Body.Close()
 
     if response.StatusCode >= 400 {
-        m.updateStatus(func(status *SessionStatus) { status.LastError = fmt.Sprintf("callback status %d", response.StatusCode) })
+        m.updateStatus(func(status *SessionStatus) {
+            status.LastError = fmt.Sprintf("callback status %d", response.StatusCode)
+            status.LastCallbackStatus = fmt.Sprintf("callback_status_%d", response.StatusCode)
+        })
         return
     }
+    m.updateStatus(func(status *SessionStatus) {
+        status.LastCallbackStatus = "processed"
+    })
 
     var inboundResponse InboundResponse
     if err := json.NewDecoder(response.Body).Decode(&inboundResponse); err != nil {
-        m.updateStatus(func(status *SessionStatus) { status.LastError = err.Error() })
+        m.updateStatus(func(status *SessionStatus) {
+            status.LastError = err.Error()
+            status.LastCallbackStatus = "invalid_callback_payload"
+        })
         return
     }
     if inboundResponse.Duplicate || strings.TrimSpace(inboundResponse.ReplyText) == "" {
+        m.updateStatus(func(status *SessionStatus) {
+            status.LastEvent = "inbound_duplicate_or_empty_reply"
+        })
         return
     }
 
@@ -420,9 +508,18 @@ func (m *Manager) forwardInbound(evt *events.Message, messageText string) {
     }
     _, err = m.client.SendMessage(context.Background(), jid, &waProto.Message{Conversation: proto.String(inboundResponse.ReplyText)})
     if err != nil {
-        m.updateStatus(func(status *SessionStatus) { status.LastError = err.Error() })
+        m.updateStatus(func(status *SessionStatus) {
+            status.LastError = err.Error()
+            status.LastEvent = "outbound_error"
+        })
         return
     }
+    m.updateStatus(func(status *SessionStatus) {
+        status.LastEvent = "outbound_sent"
+        status.LastOutboundAt = time.Now().UTC()
+        status.LastOutboundChat = payload.ChatID
+        status.LastOutboundPreview = truncate(inboundResponse.ReplyText, 120)
+    })
 }
 
 func extractText(message *waProto.Message) string {
@@ -460,4 +557,11 @@ func getenv(key string, fallback string) string {
         return fallback
     }
     return value
+}
+
+func truncate(value string, max int) string {
+    if len(value) <= max {
+        return value
+    }
+    return value[:max]
 }
