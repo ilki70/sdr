@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.entities import Tenant, TenantUser, User
 from app.schemas.auth import RegisterRequest
+from app.services.agents import ensure_default_agent_for_tenant
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
@@ -108,6 +109,8 @@ async def register_user(db: AsyncSession, payload: RegisterRequest) -> Authentic
         )
         db.add(membership)
 
+    await db.flush()
+    await ensure_default_agent_for_tenant(db, tenant.id, user.id)
     await db.commit()
     return AuthenticatedUser(
         user_id=user.id,

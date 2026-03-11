@@ -39,6 +39,7 @@ async def create_integration(
     integration = ChannelIntegration(
         id=str(uuid4()),
         tenant_id=tenant_id,
+        agent_id=payload.agent_id,
         provider=payload.provider,
         inbox_ref=payload.inbox_ref,
         api_base_url=payload.api_base_url.rstrip("/"),
@@ -58,6 +59,8 @@ async def update_integration(
     payload: IntegrationUpdateRequest,
 ) -> ChannelIntegration:
     changes = payload.model_dump(exclude_unset=True)
+    if "agent_id" in changes:
+        integration.agent_id = payload.agent_id
     if "inbox_ref" in changes and payload.inbox_ref:
         integration.inbox_ref = payload.inbox_ref
     if "api_base_url" in changes and payload.api_base_url:

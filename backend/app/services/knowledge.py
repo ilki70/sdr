@@ -8,7 +8,6 @@ import unicodedata
 import zipfile
 from hashlib import sha256
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote_plus, urlparse
 from uuid import uuid4
@@ -19,6 +18,7 @@ from pypdf import PdfReader
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.time import utcnow_naive
 from app.models.entities import KnowledgeChunk, KnowledgeSource
 from app.services.knowledge_ops import record_source_version
 from app.services.vector_store import delete_source_chunks, search_rag_context, upsert_source_chunks
@@ -342,7 +342,7 @@ async def _replace_source_chunks(
     except Exception:
         logger.exception("knowledge_vector_index_failed", extra={"source_id": source.id})
         source.status = "ready_lexical_only"
-    source.last_indexed_at = datetime.now(timezone.utc)
+    source.last_indexed_at = utcnow_naive()
 
 
 async def ingest_knowledge_source(

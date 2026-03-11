@@ -1,9 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.time import utcnow_naive
+from app.services.agents import resolve_agent_for_conversation
 from app.models.entities import ChannelIntegration, Conversation, Lead, Message
 from app.schemas.messages import ConversationDetailResponse, ConversationMessageResponse, ConversationSummaryResponse
 
@@ -70,15 +72,20 @@ async def _create_lab_lead(
 async def create_lab_conversation(
     db: AsyncSession,
     tenant_id: str,
+    agent_id: str | None = None,
     channel: str = "lab",
     title: str | None = None,
 ) -> Conversation:
+    agent = await resolve_agent_for_conversation(db, tenant_id, agent_id)
     integration = await _get_or_create_lab_integration(db, tenant_id, channel)
-    lead_title = title or f"Sessao {datetime.now(timezone.utc).strftime('%d/%m %H:%M')}"
+    if integration.agent_id != (agent.id if agent else None):
+        integration.agent_id = agent.id if agent else None
+    lead_title = title or f"Sessao {utcnow_naive().strftime('%d/%m %H:%M')}"
     lead = await _create_lab_lead(db, tenant_id, integration.id, channel, lead_title)
     conversation = Conversation(
         id=str(uuid4()),
         tenant_id=tenant_id,
+        agent_id=agent.id if agent else None,
         lead_id=lead.id,
         integration_id=integration.id,
         channel=channel,
@@ -94,13 +101,14 @@ async def ensure_lab_conversation(
     db: AsyncSession,
     tenant_id: str,
     conversation_id: str | None,
+    agent_id: str | None,
     channel: str,
 ) -> Conversation:
     if conversation_id:
         conversation = await get_conversation_or_none(db, tenant_id, conversation_id)
         if conversation:
             return conversation
-    return await create_lab_conversation(db, tenant_id=tenant_id, channel=channel)
+    return await create_lab_conversation(db, tenant_id=tenant_id, agent_id=agent_id, channel=channel)
 
 
 async def list_conversation_messages(
@@ -154,7 +162,7 @@ async def save_message(
         content=content,
         model_name=model_name,
         metadata_json=metadata_json,
-        sent_at=datetime.now(timezone.utc),
+        sent_at=utcnow_naive(),
     )
     db.add(message)
     await db.flush()
@@ -247,6 +255,7 @@ async def list_conversations(db: AsyncSession, tenant_id: str) -> list[Conversat
     return [
         ConversationSummaryResponse(
             id=conversation.id,
+            agent_id=conversation.agent_id,
             title=lead_name or f"Conversa {conversation.id[:8]}",
             channel=conversation.channel,
             status=conversation.status,

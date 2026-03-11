@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 @dataclass
 class AgentState:
     tenant_id: str
+    agent_id: str | None = None
     lead_id: str | None = None
     conversation_id: str | None = None
     channel: str = "chatwoot"

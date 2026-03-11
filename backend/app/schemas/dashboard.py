@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 class DashboardRecentConversationResponse(BaseModel):
     id: str
+    agent_id: str | None = None
     title: str
     status: str
     updated_at: datetime
@@ -29,6 +30,16 @@ class DashboardLatestEvaluationResponse(BaseModel):
     created_at: datetime
 
 
+class DashboardAgentMetricResponse(BaseModel):
+    agent_id: str
+    name: str
+    slug: str
+    conversation_count: int
+    open_conversation_count: int
+    integration_count: int
+    last_activity_at: datetime | None = None
+
+
 class DashboardOverviewResponse(BaseModel):
     client_count: int
     product_count: int
@@ -39,4 +50,5 @@ class DashboardOverviewResponse(BaseModel):
     revenue_total: Decimal
     recent_jobs: list[DashboardRecentJobResponse]
     recent_conversations: list[DashboardRecentConversationResponse]
+    agent_metrics: list[DashboardAgentMetricResponse]
     latest_evaluation: DashboardLatestEvaluationResponse | None

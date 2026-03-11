@@ -4,7 +4,9 @@ import unicodedata
 from app.agents.state import AgentState
 from app.agents.tools import tool_rag_search, tool_web_search_allowlist
 from app.services.llm import generate_sales_reply
-from app.services.personas import get_active_persona_context
+from app.core.db import SessionLocal
+from app.services.agents import get_published_agent_version_or_none
+from app.services.personas import get_persona_context_for_agent
 
 
 def _fold(value: str) -> str:
@@ -111,6 +113,26 @@ def _build_follow_up_suggestion(state: AgentState, persona: dict[str, str] | Non
     return f"Para eu te orientar melhor: {core}"
 
 
+async def _get_agent_runtime_context(state: AgentState) -> dict[str, str]:
+    persona = await get_persona_context_for_agent(state.tenant_id, state.agent_id)
+    async with SessionLocal() as session:
+        if state.agent_id:
+            agent_version = await get_published_agent_version_or_none(session, state.tenant_id, state.agent_id)
+        else:
+            agent_version = None
+    policy_text = ""
+    if agent_version:
+        policy_text = "; ".join(str(item) for item in agent_version.policy_json.get("rules", []))
+    return {
+        "persona_name": persona["persona_name"] if persona else "nao configurada",
+        "tone": persona["tone"] if persona else "consultivo",
+        "prompt_system": agent_version.prompt_system if agent_version else (persona["prompt_system"] if persona else ""),
+        "approach_rules": persona["approach_rules"] if persona else "",
+        "objection_playbook": persona["objection_playbook"] if persona else "",
+        "policy_text": policy_text,
+    }
+
+
 async def classify_intent(state: AgentState) -> AgentState:
     text = state.message_text.lower()
     if any(word in text for word in ["preco", "valor", "custo"]):
@@ -137,19 +159,18 @@ async def compose_reply(state: AgentState) -> AgentState:
         if item.get("content")
     ]
     history_block = " | ".join(history_lines[-8:]) if history_lines else "sem historico anterior"
-    persona = await get_active_persona_context(state.tenant_id)
+    runtime = await _get_agent_runtime_context(state)
     persona_block = (
-        f"Persona ativa={persona['persona_name']}. "
-        f"Tom={persona['tone']}. "
-        f"Prompt base={persona['prompt_system']}. "
-        f"Regras comerciais={persona['approach_rules']}. "
-        f"Tratamento de objecoes={persona['objection_playbook']}. "
-        if persona
-        else "Persona ativa=nao configurada. Use um tom consultivo, claro e objetivo. "
+        f"Agente ativo={runtime['persona_name']}. "
+        f"Tom={runtime['tone']}. "
+        f"Prompt base={runtime['prompt_system']}. "
+        f"Regras comerciais={runtime['approach_rules']}. "
+        f"Tratamento de objecoes={runtime['objection_playbook']}. "
+        f"Politicas do agente={runtime['policy_text']}. "
     )
     prompt = (
-        "Atue como vendedor consultivo especializado em consorcio de carros. "
-        "Priorize o playbook oficial e as paginas oficiais do cliente quando estiverem no contexto. "
+        "Atue como atendente comercial consultivo configuravel. "
+        "Priorize o playbook publicado do agente e as paginas oficiais do cliente quando estiverem no contexto. "
         "Use apenas fatos sustentados pelo contexto oficial recuperado. "
         "Se faltar dado, deixe claro e faca uma pergunta objetiva. "
         "Sempre tente conduzir o lead para o proximo passo concreto, como simulacao, adesao ou envio de proposta. "
@@ -170,6 +191,6 @@ async def compose_reply(state: AgentState) -> AgentState:
     state.draft_reply = await generate_sales_reply(prompt)
     _enforce_grounding_rules(state)
     state.reply_fragments = _split_reply_fragments(state.draft_reply)
-    state.follow_up_suggestion = _build_follow_up_suggestion(state, persona)
+    state.follow_up_suggestion = _build_follow_up_suggestion(state, runtime)
     state.next_action = "send"
     return state

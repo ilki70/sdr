@@ -18,6 +18,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
     op.create_index("idx_leads_tenant_channel_created", "leads", ["tenant_id", "source_channel", "created_at"])
     op.create_index("idx_conversations_tenant_ext", "conversations", ["tenant_id", "external_conversation_id"])
     op.create_index("idx_messages_tenant_conv_sent", "messages", ["tenant_id", "conversation_id", "sent_at"])
@@ -34,11 +35,14 @@ def upgrade() -> None:
     )
     op.create_index("idx_products_tenant_name", "products", ["tenant_id", "name"])
     op.create_index("idx_knowledge_sources_tenant_type_status", "knowledge_sources", ["tenant_id", "source_type", "status"])
-    op.execute("CREATE FULLTEXT INDEX ftx_knowledge_chunks_content ON knowledge_chunks (content)")
+    if bind.dialect.name == "mysql":
+        op.execute("CREATE FULLTEXT INDEX ftx_knowledge_chunks_content ON knowledge_chunks (content)")
 
 
 def downgrade() -> None:
-    op.execute("DROP INDEX ftx_knowledge_chunks_content ON knowledge_chunks")
+    bind = op.get_bind()
+    if bind.dialect.name == "mysql":
+        op.execute("DROP INDEX ftx_knowledge_chunks_content ON knowledge_chunks")
     op.drop_index("idx_knowledge_sources_tenant_type_status", table_name="knowledge_sources")
     op.drop_index("idx_products_tenant_name", table_name="products")
     op.drop_index("idx_metric_snapshots_filters", table_name="metric_snapshots")

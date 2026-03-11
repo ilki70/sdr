@@ -1,5 +1,4 @@
 import secrets
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import select, update
@@ -7,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.graph import run_sales_agent
 from app.agents.state import AgentState
+from app.core.time import utcnow_naive
 from app.models.entities import ChannelIntegration, Conversation, Lead, Message
 from app.schemas.whatsapp import WhatsAppInboundWebhookRequest, WhatsAppInboundWebhookResponse
 from app.services.messages import list_recent_conversation_messages, save_message
@@ -77,8 +77,8 @@ async def _get_or_create_lead(
     lead = result.scalar_one_or_none()
     if lead:
         updates = {
-            "last_seen_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
+            "last_seen_at": utcnow_naive(),
+            "updated_at": utcnow_naive(),
         }
         if payload.contact_name and payload.contact_name != lead.name:
             updates["name"] = payload.contact_name
@@ -98,7 +98,7 @@ async def _get_or_create_lead(
         phone=payload.contact_phone,
         source_channel="whatsapp",
         lifecycle_status="engaged",
-        last_seen_at=datetime.now(timezone.utc),
+        last_seen_at=utcnow_naive(),
         metadata_json=payload.metadata_json or {"source": "whatsapp-service"},
     )
     db.add(lead)
@@ -142,6 +142,7 @@ async def _get_or_create_conversation(
     conversation = Conversation(
         id=str(uuid4()),
         tenant_id=integration.tenant_id,
+        agent_id=integration.agent_id,
         lead_id=lead.id,
         integration_id=integration.id,
         external_conversation_id=payload.external_conversation_id,
@@ -197,6 +198,7 @@ async def handle_inbound_whatsapp_message(
     history = await list_recent_conversation_messages(db, integration.tenant_id, conversation.id)
     state = AgentState(
         tenant_id=integration.tenant_id,
+        agent_id=conversation.agent_id or integration.agent_id,
         lead_id=lead.id,
         conversation_id=conversation.id,
         channel="whatsapp",
@@ -229,12 +231,12 @@ async def handle_inbound_whatsapp_message(
     await db.execute(
         update(Conversation)
         .where(Conversation.id == conversation.id)
-        .values(status="open", updated_at=datetime.now(timezone.utc))
+        .values(status="open", updated_at=utcnow_naive())
     )
     await db.execute(
         update(Lead)
         .where(Lead.id == lead.id)
-        .values(last_seen_at=datetime.now(timezone.utc), lifecycle_status="engaged", updated_at=datetime.now(timezone.utc))
+        .values(last_seen_at=utcnow_naive(), lifecycle_status="engaged", updated_at=utcnow_naive())
     )
     await db.commit()
 

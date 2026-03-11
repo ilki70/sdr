@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 class MessageSimulateRequest(BaseModel):
     message_text: str = Field(min_length=1, max_length=4000)
+    agent_id: str | None = Field(default=None, max_length=36)
     lead_id: str | None = Field(default=None, max_length=36)
     conversation_id: str | None = Field(default=None, max_length=36)
     channel: str = Field(default="chatwoot", max_length=24)
@@ -21,12 +22,14 @@ class MessageSimulateResponse(BaseModel):
 
 
 class ConversationCreateRequest(BaseModel):
+    agent_id: str | None = Field(default=None, max_length=36)
     title: str | None = Field(default=None, min_length=1, max_length=140)
     channel: str = Field(default="lab", max_length=24)
 
 
 class ConversationSummaryResponse(BaseModel):
     id: str
+    agent_id: str | None = None
     title: str
     channel: str
     status: str

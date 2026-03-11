@@ -99,6 +99,9 @@ END
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    if bind.dialect.name != "mysql":
+        return
     op.execute("DROP TRIGGER IF EXISTS trg_tenant_after_insert_default_rule")
     op.execute("DROP TRIGGER IF EXISTS trg_sales_after_insert_commission")
     op.execute(TENANT_TRIGGER)
@@ -106,5 +109,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    if bind.dialect.name != "mysql":
+        return
     op.execute("DROP TRIGGER IF EXISTS trg_sales_after_insert_commission")
     op.execute("DROP TRIGGER IF EXISTS trg_tenant_after_insert_default_rule")

@@ -5,8 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import uuid4
 
 from app.core.db import SessionLocal
-from app.models.entities import BotPersona, PersonaVersion
+from app.models.entities import AgentVersion, BotPersona, PersonaVersion
 from app.schemas.personas import PersonaCreateRequest, PersonaVersionCreateRequest
+from app.services.agents import get_default_agent_or_none, get_persona_version_for_agent, get_published_agent_version_or_none
 
 
 async def list_personas(db: AsyncSession, tenant_id: str) -> list[BotPersona]:
@@ -146,24 +147,28 @@ async def publish_persona_version(
     return version
 
 
-async def get_active_persona_context(tenant_id: str) -> dict[str, str] | None:
+async def get_persona_context_for_agent(
+    tenant_id: str,
+    agent_id: str | None,
+) -> dict[str, str] | None:
     async with SessionLocal() as session:
-        personas = await list_personas(session, tenant_id)
-        active_persona = next((item for item in personas if item.is_active and item.active_version_no), None)
-        if not active_persona or active_persona.active_version_no is None:
+        agent_version: AgentVersion | None = None
+        if agent_id:
+            agent_version = await get_published_agent_version_or_none(session, tenant_id, agent_id)
+        if not agent_version:
+            default_agent = await get_default_agent_or_none(session, tenant_id)
+            if default_agent:
+                agent_version = await get_published_agent_version_or_none(session, tenant_id, default_agent.id)
+        if not agent_version:
             return None
-        result = await session.execute(
-            select(PersonaVersion).where(
-                PersonaVersion.tenant_id == tenant_id,
-                PersonaVersion.persona_id == active_persona.id,
-                PersonaVersion.version_no == active_persona.active_version_no,
-            )
-        )
-        version = result.scalar_one_or_none()
+        version = await get_persona_version_for_agent(session, tenant_id, agent_version)
         if not version:
             return None
+        persona = await get_persona_or_none(session, tenant_id, version.persona_id)
+        if not persona:
+            return None
         return {
-            "persona_name": active_persona.name,
+            "persona_name": persona.name,
             "tone": version.tone,
             "prompt_system": version.prompt_system,
             "approach_rules": "; ".join(version.approach_rules_json.get("rules", [])),
@@ -171,3 +176,7 @@ async def get_active_persona_context(tenant_id: str) -> dict[str, str] | None:
                 [f"{key}: {value}" for key, value in version.objection_playbook_json.items()]
             ),
         }
+
+
+async def get_active_persona_context(tenant_id: str) -> dict[str, str] | None:
+    return await get_persona_context_for_agent(tenant_id, None)

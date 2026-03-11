@@ -39,11 +39,13 @@ async def _prepare_state(
         db=db,
         tenant_id=context.tenant_id,
         conversation_id=payload.conversation_id,
+        agent_id=payload.agent_id,
         channel=payload.channel,
     )
     history = await list_recent_conversation_messages(db, context.tenant_id, conversation.id)
     state = AgentState(
         tenant_id=context.tenant_id,
+        agent_id=conversation.agent_id,
         lead_id=conversation.lead_id,
         conversation_id=conversation.id,
         channel=payload.channel,
@@ -76,6 +78,7 @@ async def post_conversation(
     conversation = await create_lab_conversation(
         db,
         tenant_id=context.tenant_id,
+        agent_id=payload.agent_id,
         channel=payload.channel,
         title=payload.title,
     )
@@ -109,6 +112,7 @@ async def simulate_message(
         db=db,
         tenant_id=context.tenant_id,
         conversation_id=conversation_id,
+        agent_id=payload.agent_id,
         channel=payload.channel,
     )
     await persist_conversation_exchange(
@@ -144,6 +148,7 @@ async def stream_message(
         db=db,
         tenant_id=context.tenant_id,
         conversation_id=conversation_id,
+        agent_id=payload.agent_id,
         channel=payload.channel,
     )
     await persist_conversation_exchange(

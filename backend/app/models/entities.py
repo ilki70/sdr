@@ -105,6 +105,7 @@ class KnowledgeSource(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
     product_id: Mapped[str] = mapped_column(ForeignKey("products.id"), nullable=False)
+    agent_id: Mapped[Optional[str]] = mapped_column(ForeignKey("agents.id"), nullable=True)
     source_type: Mapped[str] = mapped_column(String(16), nullable=False)
     source_ref: Mapped[str] = mapped_column(String(500), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
@@ -189,6 +190,41 @@ class BotPersona(Base, TimestampMixin):
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(), nullable=True)
 
 
+class Agent(Base, TimestampMixin):
+    __tablename__ = "agents"
+    __table_args__ = (UniqueConstraint("tenant_id", "slug", name="uq_agent_slug"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(140), nullable=False)
+    slug: Mapped[str] = mapped_column(String(140), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
+    active_version_no: Mapped[Optional[int]] = mapped_column(Integer(), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="active")
+    created_by_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(), nullable=True)
+
+
+class AgentVersion(Base):
+    __tablename__ = "agent_versions"
+    __table_args__ = (UniqueConstraint("agent_id", "version_no", name="uq_agent_version"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"), nullable=False)
+    version_no: Mapped[int] = mapped_column(Integer(), nullable=False)
+    persona_id: Mapped[Optional[str]] = mapped_column(ForeignKey("bot_personas.id"), nullable=True)
+    persona_version_no: Mapped[Optional[int]] = mapped_column(Integer(), nullable=True)
+    prompt_system: Mapped[str] = mapped_column(Text(), nullable=False)
+    policy_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    tool_config_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    knowledge_config_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    channel_config_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    is_published: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False)
+    created_by_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+
+
 class PersonaVersion(Base):
     __tablename__ = "persona_versions"
     __table_args__ = (UniqueConstraint("persona_id", "version_no", name="uq_persona_version"),)
@@ -211,6 +247,7 @@ class ChannelIntegration(Base, TimestampMixin):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    agent_id: Mapped[Optional[str]] = mapped_column(ForeignKey("agents.id"), nullable=True)
     provider: Mapped[str] = mapped_column(String(24), nullable=False)
     inbox_ref: Mapped[str] = mapped_column(String(128), nullable=False)
     api_base_url: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -259,6 +296,7 @@ class Conversation(Base, TimestampMixin):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    agent_id: Mapped[Optional[str]] = mapped_column(ForeignKey("agents.id"), nullable=True)
     lead_id: Mapped[str] = mapped_column(ForeignKey("leads.id"), nullable=False)
     integration_id: Mapped[str] = mapped_column(ForeignKey("channel_integrations.id"), nullable=False)
     external_conversation_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)

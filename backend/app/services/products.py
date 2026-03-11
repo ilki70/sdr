@@ -1,9 +1,9 @@
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.time import utcnow_naive
 from app.models.entities import Product, ProductAsset
 from app.schemas.products import ProductCreateRequest, ProductUpdateRequest
 
@@ -42,7 +42,7 @@ async def update_product(db: AsyncSession, product: Product, payload: ProductUpd
 
 
 async def soft_delete_product(db: AsyncSession, product: Product) -> None:
-    product.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    product.deleted_at = utcnow_naive()
     await db.commit()
 
 

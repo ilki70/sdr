@@ -1,9 +1,9 @@
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.time import utcnow_naive
 from app.models.entities import CommissionRule
 from app.schemas.commissions import CommissionRuleCreateRequest, CommissionRulePatchRequest
 
@@ -53,5 +53,5 @@ async def patch_rule(db: AsyncSession, rule: CommissionRule, payload: Commission
 
 
 async def soft_delete_rule(db: AsyncSession, rule: CommissionRule) -> None:
-    rule.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    rule.deleted_at = utcnow_naive()
     await db.commit()

@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 import difflib
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.time import utcnow_naive
 from app.models.entities import EvaluationRun, KnowledgeJob, KnowledgeSourceVersion
-
-
-def utcnow_naive() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 async def create_knowledge_job(

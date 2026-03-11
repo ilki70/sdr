@@ -3,6 +3,7 @@ from uuid import uuid4
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.time import utcnow_naive
 from app.models.entities import Client
 from app.schemas.clients import ClientCreateRequest, ClientUpdateRequest
 
@@ -38,7 +39,5 @@ async def update_client(db: AsyncSession, client: Client, payload: ClientUpdateR
 
 
 async def soft_delete_client(db: AsyncSession, client: Client) -> None:
-    from datetime import datetime, timezone
-
-    client.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    client.deleted_at = utcnow_naive()
     await db.commit()
