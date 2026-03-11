@@ -122,7 +122,7 @@ async def simulate_message(
         assistant_text=state.draft_reply,
         intent=state.intent,
         confidence_score=state.confidence_score,
-        model_name=settings.openai_model if settings.openai_api_key else "mock-llm",
+        model_name=settings.openai_model if settings.resolved_openai_api_key else "mock-llm",
         reply_fragments=state.reply_fragments,
         follow_up_suggestion=state.follow_up_suggestion,
     )
@@ -158,7 +158,7 @@ async def stream_message(
         assistant_text=state.draft_reply,
         intent=state.intent,
         confidence_score=state.confidence_score,
-        model_name=settings.openai_model if settings.openai_api_key else "mock-llm",
+        model_name=settings.openai_model if settings.resolved_openai_api_key else "mock-llm",
         reply_fragments=state.reply_fragments,
         follow_up_suggestion=state.follow_up_suggestion,
     )

@@ -198,7 +198,7 @@ async def _run_turn(
             assistant_text=state.draft_reply,
             intent=state.intent,
             confidence_score=state.confidence_score,
-            model_name=settings.openai_model if settings.openai_api_key else "mock-llm",
+            model_name=settings.openai_model if settings.resolved_openai_api_key else "mock-llm",
         )
 
     return {

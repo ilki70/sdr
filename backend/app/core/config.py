@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 
 from pydantic import Field
@@ -21,6 +22,7 @@ class Settings(BaseSettings):
     qdrant_url: str = Field(default="", alias="QDRANT_URL")
 
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    openai_api_key_file: str = Field(default="", alias="OPENAI_API_KEY_FILE")
     openai_model: str = Field(default="gpt-4o-mini", alias="OPENAI_MODEL")
     openai_embedding_model: str = Field(default="text-embedding-3-small", alias="OPENAI_EMBEDDING_MODEL")
     openai_timeout_seconds: int = Field(default=30, alias="OPENAI_TIMEOUT_SECONDS")
@@ -40,6 +42,17 @@ class Settings(BaseSettings):
     @property
     def allowed_origins(self) -> List[str]:
         return [origin.strip() for origin in self.allowed_origins_raw.split(",") if origin.strip()]
+
+    @property
+    def resolved_openai_api_key(self) -> str:
+        if self.openai_api_key:
+            return self.openai_api_key
+        if self.openai_api_key_file:
+            try:
+                return Path(self.openai_api_key_file).read_text(encoding="utf-8").strip()
+            except OSError:
+                return ""
+        return ""
 
 
 @lru_cache

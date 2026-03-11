@@ -16,11 +16,14 @@ services:
     image: ${BACKEND_IMAGE:-ghcr.io/ilki70/sdr/backend:latest}
     environment:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      OPENAI_API_KEY_FILE: /run/secrets/atendente3_openai_api_key
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://atendente3:atendente3@postgres:5432/atendente3}
     volumes:
       - atendente3_backend_data:/data
+    secrets:
+      - atendente3_openai_api_key
     networks:
       - internal
     deploy:
@@ -92,3 +95,7 @@ volumes:
   atendente3_backend_data:
   atendente3_postgres_data:
   atendente3_whatsapp_data:
+
+secrets:
+  atendente3_openai_api_key:
+    external: true

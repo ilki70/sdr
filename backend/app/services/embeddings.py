@@ -17,11 +17,11 @@ EMBEDDING_DIMS = {
 
 @lru_cache
 def get_embedding_client() -> AsyncOpenAI:
-    return AsyncOpenAI(api_key=settings.openai_api_key, timeout=settings.openai_timeout_seconds)
+    return AsyncOpenAI(api_key=settings.resolved_openai_api_key, timeout=settings.openai_timeout_seconds)
 
 
 def embeddings_enabled() -> bool:
-    return bool(settings.openai_api_key and settings.qdrant_url)
+    return bool(settings.resolved_openai_api_key and settings.qdrant_url)
 
 
 def embedding_dimensions() -> int:

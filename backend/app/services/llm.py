@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 @lru_cache
 def _get_client() -> AsyncOpenAI:
-    return AsyncOpenAI(api_key=settings.openai_api_key, timeout=settings.openai_timeout_seconds)
+    return AsyncOpenAI(api_key=settings.resolved_openai_api_key, timeout=settings.openai_timeout_seconds)
 
 
 def _extract_text(message: Any) -> str:
@@ -54,7 +54,7 @@ async def _chat_completion(prompt: str) -> str:
 
 
 async def generate_sales_reply(prompt: str) -> str:
-    if not settings.openai_api_key:
+    if not settings.resolved_openai_api_key:
         return f"[mock-llm] {prompt[:240]}"
     try:
         return await _chat_completion(prompt)
@@ -91,7 +91,7 @@ async def judge_sales_reply(
     assistant_reply: str,
     official_context: str,
 ) -> dict[str, Any]:
-    if not settings.openai_api_key:
+    if not settings.resolved_openai_api_key:
         return _heuristic_judge(user_message, assistant_reply)
 
     client = _get_client()
@@ -127,12 +127,12 @@ async def judge_sales_reply(
 
 
 async def transcribe_audio_stub(file_ref: str) -> str:
-    if not settings.openai_api_key:
+    if not settings.resolved_openai_api_key:
         return f"transcription pending for {file_ref}"
     return f"Transcricao (stub) habilitada para {file_ref}."
 
 
 async def analyze_image_stub(file_ref: str) -> str:
-    if not settings.openai_api_key:
+    if not settings.resolved_openai_api_key:
         return f"image analysis pending for {file_ref}"
     return f"Analise de imagem (stub) habilitada para {file_ref}."
