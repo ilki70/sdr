@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Agente Vendedor",
-  description: "Plataforma de vendas com IA.",
+  title: "SDR | Plataforma de Operacao Conversacional com IA",
+  description: "Agentes, inbox, analytics e quality para vendas, atendimento e pos-venda.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <body>{children}</body>
     </html>
   );
