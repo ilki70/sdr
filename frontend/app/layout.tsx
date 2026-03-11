@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: "SDR | Plataforma de Operacao Conversacional com IA",
-  description: "Agentes, inbox, analytics e quality para vendas, atendimento e pos-venda.",
+  title: `${BRAND_NAME} | ${BRAND_TAGLINE}`,
+  description: "Agentes com IA para vendas, atendimento e pos-venda em uma plataforma operacional.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

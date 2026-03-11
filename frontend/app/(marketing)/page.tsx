@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BRAND_NAME } from "@/lib/brand";
 
 const highlights = [
   {
@@ -53,7 +54,7 @@ export default function MarketingPage() {
         <div className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col justify-center px-6 py-20">
           <div className="max-w-4xl">
             <p className="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-1 text-[11px] uppercase tracking-[0.28em] text-[var(--accent)]">
-              Plataforma de Operacao Conversacional
+              {BRAND_NAME}
             </p>
             <h1 className="mt-8 max-w-5xl text-5xl font-semibold leading-[0.95] tracking-[-0.04em] md:text-7xl">
               Atendentes com IA para vender, atender e acompanhar clientes em escala.

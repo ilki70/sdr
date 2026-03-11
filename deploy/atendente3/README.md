@@ -6,8 +6,8 @@ Esta pasta versiona a definicao atual da stack `atendente3` observada em produca
 
 - Servicos atuais: `postgres`, `backend`, `frontend`, `db-admin` e `whatsapp-service`
 - Rotas Traefik:
-  - `atendente3.orfi.com.br` -> `frontend`
-  - `atendente3-db.orfi.com.br` -> `db-admin`
+  - `pulse.orfi.com.br` -> `frontend`
+  - `pulse-db.orfi.com.br` -> `db-admin`
 - Volumes persistentes da stack
 - Variaveis de ambiente observadas nos servicos
 - Compatibilidade do manifesto com os Dockerfiles versionados neste repositório
@@ -39,7 +39,7 @@ O workflow [`build-atendente3-images.yml`](/home/ilki/sdr/.github/workflows/buil
 - `ghcr.io/ilki70/sdr/frontend:latest`
 - `ghcr.io/ilki70/sdr/whatsapp-service:latest`
 
-Para a VPS usar as imagens do GitHub, ajuste o `.env` da stack a partir de `.env.example`, principalmente `DATABASE_URL`, `SESSION_SECRET`, `WHATSAPP_WEBHOOK_SECRET` e os hosts publicos.
+Para a VPS usar as imagens do GitHub, ajuste o `.env` da stack a partir de `.env.example`, principalmente `DATABASE_URL`, `SESSION_SECRET`, `WHATSAPP_WEBHOOK_SECRET` e os hosts publicos do Pulse.
 
 ## Contrato do canal WhatsApp
 

@@ -32,7 +32,7 @@ services:
   frontend:
     image: ${FRONTEND_IMAGE:-ghcr.io/ilki70/sdr/frontend:latest}
     environment:
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://atendente3.orfi.com.br}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://pulse.orfi.com.br}
       BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
       SESSION_SECRET: ${SESSION_SECRET:-replace-with-32-plus-chars}
     networks:
@@ -45,7 +45,7 @@ services:
         traefik.enable: "true"
         traefik.http.routers.atendente3-frontend.entrypoints: websecure
         traefik.http.routers.atendente3-frontend.priority: "1"
-        traefik.http.routers.atendente3-frontend.rule: Host(`${ATENDENTE3_HOST:-atendente3.orfi.com.br}`)
+        traefik.http.routers.atendente3-frontend.rule: Host(`${ATENDENTE3_HOST:-pulse.orfi.com.br}`) || Host(`atendente3.orfi.com.br`)
         traefik.http.routers.atendente3-frontend.service: atendente3-frontend
         traefik.http.routers.atendente3-frontend.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencryptresolver}
         traefik.http.services.atendente3-frontend.loadbalancer.server.port: "3000"
@@ -66,7 +66,7 @@ services:
         traefik.http.routers.atendente3-dbadmin.entrypoints: websecure
         traefik.http.routers.atendente3-dbadmin.middlewares: atendente3-dbadmin-ipallowlist
         traefik.http.routers.atendente3-dbadmin.priority: "1"
-        traefik.http.routers.atendente3-dbadmin.rule: Host(`${ATENDENTE3_DBADMIN_HOST:-atendente3-db.orfi.com.br}`)
+        traefik.http.routers.atendente3-dbadmin.rule: Host(`${ATENDENTE3_DBADMIN_HOST:-pulse-db.orfi.com.br}`) || Host(`atendente3-db.orfi.com.br`)
         traefik.http.routers.atendente3-dbadmin.service: atendente3-dbadmin
         traefik.http.routers.atendente3-dbadmin.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencryptresolver}
         traefik.http.services.atendente3-dbadmin.loadbalancer.server.port: "8080"

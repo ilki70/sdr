@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BRAND_NAME } from "@/lib/brand";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -41,8 +42,9 @@ export default function RegisterPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <form onSubmit={onSubmit} className="w-full max-w-md rounded-xl border border-white/15 bg-white/5 p-6">
+        <p className="text-xs uppercase tracking-[0.24em] text-[var(--accent)]">{BRAND_NAME}</p>
         <h1 className="text-2xl font-semibold">Criar Conta de Teste</h1>
-        <p className="mt-2 text-sm text-white/70">Use tenant slug (ex.: tenant-lab).</p>
+        <p className="mt-2 text-sm text-white/70">Crie seu ambiente inicial e comece a configurar sua operacao.</p>
 
         <label className="mt-6 block text-sm">Nome completo</label>
         <input

@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { BRAND_NAME } from "@/lib/brand";
 
 type LoginError = string | null;
 
@@ -49,8 +50,9 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <form onSubmit={onSubmit} className="w-full max-w-md rounded-xl border border-white/15 bg-white/5 p-6">
+        <p className="text-xs uppercase tracking-[0.24em] text-[var(--accent)]">{BRAND_NAME}</p>
         <h1 className="text-2xl font-semibold">Entrar</h1>
-        <p className="mt-2 text-sm text-white/70">Sessao segura via iron-session.</p>
+        <p className="mt-2 text-sm text-white/70">Acesse sua operacao conversacional.</p>
 
         <label className="mt-6 block text-sm">Email</label>
         <input
