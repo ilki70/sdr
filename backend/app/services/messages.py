@@ -140,6 +140,7 @@ async def save_message(
     sender_type: str,
     direction: str,
     content: str,
+    external_message_id: str | None = None,
     model_name: str | None = None,
     metadata_json: dict | None = None,
 ) -> Message:
@@ -147,6 +148,7 @@ async def save_message(
         id=str(uuid4()),
         tenant_id=tenant_id,
         conversation_id=conversation_id,
+        external_message_id=external_message_id,
         sender_type=sender_type,
         direction=direction,
         content=content,
