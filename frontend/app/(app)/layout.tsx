@@ -2,12 +2,14 @@ import Link from "next/link";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/agents", label: "Agents" },
   { href: "/clients", label: "Clients" },
   { href: "/products", label: "Products" },
   { href: "/knowledge", label: "Knowledge" },
   { href: "/personas", label: "Personas" },
   { href: "/integrations", label: "Integrations" },
   { href: "/conversations", label: "Conversations" },
+  { href: "/quality", label: "Quality" },
   { href: "/agent-lab", label: "Agent Lab" },
   { href: "/commissions", label: "Commissions" },
 ];

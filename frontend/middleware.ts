@@ -6,12 +6,14 @@ const SESSION_COOKIE = "agente_vendedor_session";
 function requiresAuth(pathname: string): boolean {
   return (
     pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/agents") ||
     pathname.startsWith("/clients") ||
     pathname.startsWith("/products") ||
     pathname.startsWith("/knowledge") ||
     pathname.startsWith("/personas") ||
     pathname.startsWith("/integrations") ||
     pathname.startsWith("/conversations") ||
+    pathname.startsWith("/quality") ||
     pathname.startsWith("/agent-lab") ||
     pathname.startsWith("/sales") ||
     pathname.startsWith("/commissions") ||
@@ -37,12 +39,14 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/dashboard/:path*",
+    "/agents/:path*",
     "/clients/:path*",
     "/products/:path*",
     "/knowledge/:path*",
     "/personas/:path*",
     "/integrations/:path*",
     "/conversations/:path*",
+    "/quality/:path*",
     "/agent-lab/:path*",
     "/sales/:path*",
     "/commissions/:path*",

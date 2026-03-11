@@ -6,6 +6,7 @@ import { formatDateTimeSP } from "@/lib/datetime";
 
 type ConversationSummary = {
   id: string;
+  agent_id: string | null;
   title: string;
   channel: string;
   status: string;
@@ -45,6 +46,13 @@ type AgentRuntimeState = {
   followUpSuggestion: string | null;
 };
 
+type AgentOption = {
+  id: string;
+  name: string;
+  slug: string;
+  active_version_no: number | null;
+};
+
 function createId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -74,7 +82,9 @@ function extractRuntime(messages: ConversationMessage[]): AgentRuntimeState {
 
 export default function AgentLabPage() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [agents, setAgents] = useState<AgentOption[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -95,11 +105,16 @@ export default function AgentLabPage() {
       setIsBootstrapping(true);
       setError(null);
       try {
-        const items = await fetchJson<ConversationSummary[]>("/api/proxy/messages/conversations");
+        const [items, agentItems] = await Promise.all([
+          fetchJson<ConversationSummary[]>("/api/proxy/messages/conversations"),
+          fetchJson<AgentOption[]>("/api/proxy/agents"),
+        ]);
         if (cancelled) {
           return;
         }
         setConversations(items);
+        setAgents(agentItems);
+        setSelectedAgentId((current) => current || agentItems[0]?.id || null);
         if (items.length > 0) {
           await openConversation(items[0].id, { silent: true });
           return;
@@ -141,11 +156,12 @@ export default function AgentLabPage() {
     try {
       const created = await fetchJson<ConversationSummary>("/api/proxy/messages/conversations", {
         method: "POST",
-        body: JSON.stringify({ channel: "lab" }),
+        body: JSON.stringify({ channel: "lab", agent_id: selectedAgentId }),
       });
       const items = await refreshConversations();
       const selected = items.find((item) => item.id === created.id) || created;
       setActiveConversationId(selected.id);
+      setSelectedAgentId(selected.agent_id || selectedAgentId);
       setMessages([]);
       setAgentRuntime({ intent: null, replyFragments: [], followUpSuggestion: null });
       return selected;
@@ -168,6 +184,7 @@ export default function AgentLabPage() {
       const detail = await fetchJson<ConversationDetail>(`/api/proxy/messages/conversations/${conversationId}`);
       startTransition(() => {
         setActiveConversationId(detail.conversation.id);
+        setSelectedAgentId(detail.conversation.agent_id || selectedAgentId);
         setMessages(mapMessages(detail.messages));
         setAgentRuntime(extractRuntime(detail.messages));
       });
@@ -209,7 +226,7 @@ export default function AgentLabPage() {
       const response = await fetch("/api/proxy/messages/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-        body: JSON.stringify({ message_text: text, channel: "lab", conversation_id: conversationId }),
+        body: JSON.stringify({ message_text: text, channel: "lab", conversation_id: conversationId, agent_id: selectedAgentId }),
       });
 
       if (!response.ok || !response.body) {
@@ -305,6 +322,7 @@ export default function AgentLabPage() {
   }
 
   const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId) || null;
+  const activeAgent = agents.find((agent) => agent.id === selectedAgentId) || null;
 
   return (
     <main className="grid gap-5 xl:grid-cols-[320px_1fr]">
@@ -383,6 +401,26 @@ export default function AgentLabPage() {
               {activeConversation ? `Canal ${activeConversation.channel}` : "Aguardando"}
             </div>
           </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+            <label className="block">
+              <span className="mb-2 block text-[11px] uppercase tracking-[0.22em] text-white/45">Agente em teste</span>
+              <select
+                value={selectedAgentId || ""}
+                onChange={(event) => setSelectedAgentId(event.target.value || null)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+              >
+                {agents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name} {agent.active_version_no ? `(v${agent.active_version_no})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Rota atual</p>
+              <p className="mt-2 text-sm text-white/75">{activeAgent ? `${activeAgent.name} • ${activeAgent.slug}` : "Nenhum agente selecionado"}</p>
+            </div>
+          </div>
           {error ? <p className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p> : null}
         </header>
 
@@ -432,10 +470,10 @@ export default function AgentLabPage() {
                 </p>
                 <button
                   type="submit"
-                  disabled={isSending || input.trim().length === 0 || isLoadingConversation}
+                  disabled={isSending || input.trim().length === 0 || isLoadingConversation || !selectedAgentId}
                   className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isSending ? "Enviando..." : "Enviar"}
+                  {isSending ? "Enviando..." : activeAgent ? `Enviar para ${activeAgent.name}` : "Enviar"}
                 </button>
               </div>
             </form>
@@ -463,6 +501,12 @@ export default function AgentLabPage() {
                 <div>
                   <dt className="text-[11px] uppercase tracking-wide text-white/40">Ultima atualizacao</dt>
                   <dd className="mt-1 text-xs">{activeConversation ? formatDateTimeSP(activeConversation.updated_at) : "-"}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wide text-white/40">Agente vinculado</dt>
+                  <dd className="mt-1 text-xs">
+                    {agents.find((agent) => agent.id === activeConversation?.agent_id)?.name || activeAgent?.name || "-"}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-[11px] uppercase tracking-wide text-white/40">Intent mais recente</dt>

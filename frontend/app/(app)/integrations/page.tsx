@@ -6,6 +6,7 @@ import { formatDateTimeSP } from "@/lib/datetime";
 
 type Integration = {
   id: string;
+  agent_id: string | null;
   provider: string;
   inbox_ref: string;
   api_base_url: string;
@@ -14,10 +15,19 @@ type Integration = {
   config_json: Record<string, unknown> | null;
 };
 
+type AgentOption = {
+  id: string;
+  name: string;
+  slug: string;
+  active_version_no: number | null;
+};
+
 export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [agents, setAgents] = useState<AgentOption[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  const [agentId, setAgentId] = useState("");
   const [provider, setProvider] = useState("chatwoot");
   const [inboxRef, setInboxRef] = useState("");
   const [apiBaseUrl, setApiBaseUrl] = useState("");
@@ -33,8 +43,12 @@ export default function IntegrationsPage() {
   );
 
   async function loadIntegrations(nextSelectedId?: string | null) {
-    const items = await fetchJson<Integration[]>("/api/proxy/integrations");
+    const [items, agentItems] = await Promise.all([
+      fetchJson<Integration[]>("/api/proxy/integrations"),
+      fetchJson<AgentOption[]>("/api/proxy/agents"),
+    ]);
     setIntegrations(items);
+    setAgents(agentItems);
     const preferredId = nextSelectedId ?? selectedId;
     const selected = items.find((integration) => integration.id === preferredId) || items[0] || null;
     setSelectedId(selected?.id || null);
@@ -50,6 +64,7 @@ export default function IntegrationsPage() {
   useEffect(() => {
     if (selectedIntegration) {
       setFormMode("edit");
+      setAgentId(selectedIntegration.agent_id || "");
       setProvider(selectedIntegration.provider);
       setInboxRef(selectedIntegration.inbox_ref);
       setApiBaseUrl(selectedIntegration.api_base_url);
@@ -60,6 +75,7 @@ export default function IntegrationsPage() {
     }
 
     setFormMode("create");
+    setAgentId("");
     setProvider("chatwoot");
     setInboxRef("");
     setApiBaseUrl("");
@@ -79,6 +95,7 @@ export default function IntegrationsPage() {
         const created = await fetchJson<Integration>("/api/proxy/integrations", {
           method: "POST",
           body: JSON.stringify({
+            agent_id: agentId || null,
             provider,
             inbox_ref: inboxRef,
             api_base_url: apiBaseUrl,
@@ -92,6 +109,7 @@ export default function IntegrationsPage() {
         await fetchJson<Integration>(`/api/proxy/integrations/${selectedIntegration.id}`, {
           method: "PATCH",
           body: JSON.stringify({
+            agent_id: agentId || null,
             inbox_ref: inboxRef,
             api_base_url: apiBaseUrl,
             webhook_secret: webhookSecret || undefined,
@@ -143,6 +161,9 @@ export default function IntegrationsPage() {
                 <span className="text-xs uppercase tracking-wide text-white/50">{integration.status}</span>
               </div>
               <p className="mt-2 text-sm text-white/70">Inbox: {integration.inbox_ref}</p>
+              <p className="mt-2 text-xs text-white/55">
+                Agente: {agents.find((agent) => agent.id === integration.agent_id)?.name || "nao vinculado"}
+              </p>
               <p className="mt-2 text-xs text-white/50">{integration.api_base_url}</p>
               <p className="mt-3 text-xs text-white/40">Atualizado em {formatDateTimeSP(integration.updated_at)}</p>
             </button>
@@ -182,6 +203,21 @@ export default function IntegrationsPage() {
                 <option value="active">active</option>
                 <option value="test">test</option>
                 <option value="paused">paused</option>
+              </select>
+            </label>
+            <label className="space-y-2 text-sm text-white/70">
+              <span>Agente responsavel</span>
+              <select
+                value={agentId}
+                onChange={(event) => setAgentId(event.target.value)}
+                className="w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-white outline-none"
+              >
+                <option value="">Nenhum binding</option>
+                {agents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name} {agent.active_version_no ? `(v${agent.active_version_no})` : ""}
+                  </option>
+                ))}
               </select>
             </label>
           </div>

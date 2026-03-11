@@ -14,11 +14,22 @@ type DashboardJob = {
 
 type DashboardConversation = {
   id: string;
+  agent_id: string | null;
   status: string;
   updated_at: string;
   title: string;
   message_count: number;
   last_message_preview: string | null;
+};
+
+type DashboardAgentMetric = {
+  agent_id: string;
+  name: string;
+  slug: string;
+  conversation_count: number;
+  open_conversation_count: number;
+  integration_count: number;
+  last_activity_at: string | null;
 };
 
 type EvaluationRun = {
@@ -39,6 +50,7 @@ type DashboardOverview = {
   revenue_total: string;
   recent_jobs: DashboardJob[];
   recent_conversations: DashboardConversation[];
+  agent_metrics: DashboardAgentMetric[];
   latest_evaluation: EvaluationRun | null;
 };
 
@@ -127,6 +139,34 @@ export default function DashboardPage() {
 
         <div className="space-y-5">
           <section className="rounded-[28px] border border-white/10 bg-white/5 p-6">
+            <h2 className="text-xl font-semibold">Saude por agente</h2>
+            <div className="mt-4 space-y-3">
+              {data?.agent_metrics.map((agent) => (
+                <article key={agent.agent_id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <strong className="text-sm">{agent.name}</strong>
+                      <p className="mt-1 text-xs uppercase tracking-wide text-white/40">{agent.slug}</p>
+                    </div>
+                    <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/55">
+                      {agent.conversation_count} conversas
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs text-white/55">
+                    {agent.open_conversation_count} abertas • {agent.integration_count} bindings de canal
+                  </p>
+                  <p className="mt-2 text-xs text-white/40">
+                    Ultima atividade: {agent.last_activity_at ? formatDateTimeSP(agent.last_activity_at) : "sem atividade"}
+                  </p>
+                </article>
+              ))}
+              {data && data.agent_metrics.length === 0 ? (
+                <p className="text-sm text-white/60">Nenhum agente encontrado no tenant.</p>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="rounded-[28px] border border-white/10 bg-white/5 p-6">
             <h2 className="text-xl font-semibold">Ultima avaliacao</h2>
             {data?.latest_evaluation ? (
               <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -150,6 +190,7 @@ export default function DashboardPage() {
                 <article key={conversation.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
                   <strong className="text-sm">{conversation.title}</strong>
                   <p className="mt-2 text-xs text-white/50">{formatDateTimeSP(conversation.updated_at)}</p>
+                  <p className="mt-2 text-xs text-white/40">Agente {conversation.agent_id ? conversation.agent_id.slice(0, 8) : "n/a"}</p>
                   <p className="mt-2 text-sm text-white/65">{conversation.last_message_preview || "Sem mensagens ainda."}</p>
                   <p className="mt-2 text-xs uppercase tracking-wide text-white/35">{conversation.message_count} mensagens</p>
                 </article>
