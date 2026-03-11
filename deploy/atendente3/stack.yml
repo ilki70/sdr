@@ -1,0 +1,94 @@
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-atendente3}
+      POSTGRES_USER: ${POSTGRES_USER:-atendente3}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atendente3}
+    volumes:
+      - atendente3_postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    deploy:
+      replicas: 1
+
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/ilki70/sdr/backend:latest}
+    environment:
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://atendente3:atendente3@postgres:5432/atendente3}
+    volumes:
+      - atendente3_backend_data:/data
+    networks:
+      - internal
+    deploy:
+      replicas: 1
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/ilki70/sdr/frontend:latest}
+    environment:
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://atendente3.orfi.com.br}
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
+      SESSION_SECRET: ${SESSION_SECRET:-replace-with-32-plus-chars}
+    networks:
+      - internal
+      - orfinet3
+    deploy:
+      replicas: 1
+      labels:
+        traefik.docker.network: ${TRAEFIK_NETWORK:-orfinet3}
+        traefik.enable: "true"
+        traefik.http.routers.atendente3-frontend.entrypoints: websecure
+        traefik.http.routers.atendente3-frontend.priority: "1"
+        traefik.http.routers.atendente3-frontend.rule: Host(`${ATENDENTE3_HOST:-atendente3.orfi.com.br}`)
+        traefik.http.routers.atendente3-frontend.service: atendente3-frontend
+        traefik.http.routers.atendente3-frontend.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencryptresolver}
+        traefik.http.services.atendente3-frontend.loadbalancer.server.port: "3000"
+
+  db-admin:
+    image: adminer:4.8.1@sha256:34d37131366c5aa84e1693dbed48593ed6f95fb450b576c1a7a59d3a9c9e8802
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    networks:
+      - internal
+      - orfinet3
+    deploy:
+      replicas: 1
+      labels:
+        traefik.docker.network: ${TRAEFIK_NETWORK:-orfinet3}
+        traefik.enable: "true"
+        traefik.http.middlewares.atendente3-dbadmin-ipallowlist.ipallowlist.sourcerange: ${ATENDENTE3_DBADMIN_ALLOWLIST:-201.75.189.147/32}
+        traefik.http.routers.atendente3-dbadmin.entrypoints: websecure
+        traefik.http.routers.atendente3-dbadmin.middlewares: atendente3-dbadmin-ipallowlist
+        traefik.http.routers.atendente3-dbadmin.priority: "1"
+        traefik.http.routers.atendente3-dbadmin.rule: Host(`${ATENDENTE3_DBADMIN_HOST:-atendente3-db.orfi.com.br}`)
+        traefik.http.routers.atendente3-dbadmin.service: atendente3-dbadmin
+        traefik.http.routers.atendente3-dbadmin.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencryptresolver}
+        traefik.http.services.atendente3-dbadmin.loadbalancer.server.port: "8080"
+
+  whatsapp-service:
+    image: ${WHATSAPP_SERVICE_IMAGE:-ghcr.io/ilki70/sdr/whatsapp-service:latest}
+    environment:
+      BACKEND_WEBHOOK_URL: ${BACKEND_WEBHOOK_URL:-http://backend:8000/api/v1/whatsapp/webhook}
+      WHATSAPP_DEFAULT_INBOX_REF: ${WHATSAPP_DEFAULT_INBOX_REF:-whatsapp-default}
+      WHATSAPP_WEBHOOK_SECRET: ${WHATSAPP_WEBHOOK_SECRET:-replace-with-integration-secret}
+    volumes:
+      - atendente3_whatsapp_data:/data
+    networks:
+      - internal
+    deploy:
+      replicas: 1
+
+networks:
+  internal:
+    driver: overlay
+    attachable: true
+  orfinet3:
+    external: true
+
+volumes:
+  atendente3_backend_data:
+  atendente3_postgres_data:
+  atendente3_whatsapp_data:

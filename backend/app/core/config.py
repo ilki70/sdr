@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     allowed_origins_raw: str = Field(default="http://localhost:3000", alias="ALLOWED_ORIGINS")
 
+    database_url: str = Field(default="", alias="DATABASE_URL")
     mysql_url: str = Field(default="", alias="MYSQL_URL")
     redis_url: str = Field(default="", alias="REDIS_URL")
     qdrant_url: str = Field(default="", alias="QDRANT_URL")

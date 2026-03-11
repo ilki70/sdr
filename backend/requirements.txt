@@ -16,6 +16,8 @@ openai
 sqlalchemy
 alembic
 asyncmy
+asyncpg
+psycopg[binary]
 PyMySQL
 tenacity
 pypdf

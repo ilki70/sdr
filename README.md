@@ -110,3 +110,12 @@ Atalho PowerShell:
 Se o MySQL local falhar na primeira inicializacao:
 - `.\scripts\reset-local-tests.ps1`
 - depois `.\scripts\start-local-tests.ps1`
+
+## Deploy versionado da stack atendente3
+
+A definicao atual observada em producao para a stack `atendente3` foi versionada em [`deploy/atendente3/README.md`](/home/ilki/sdr/deploy/atendente3/README.md) com stack Swarm e `.env.example`.
+
+Estado atual:
+- o repositório agora descreve a stack implantada;
+- backend, frontend e `whatsapp-service` agora podem ser construidos/publicados pelo proprio repo;
+- o canal WhatsApp passa a ter um webhook versionado no backend e um serviço dedicado no repositório.

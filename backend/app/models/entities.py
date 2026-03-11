@@ -14,9 +14,9 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    JSON,
     text,
 )
-from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin

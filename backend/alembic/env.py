@@ -28,13 +28,14 @@ target_metadata = None
 
 
 def _normalize_alembic_url(url: str) -> str:
-    return url.replace("+asyncmy", "+pymysql")
+    return url.replace("+asyncmy", "+pymysql").replace("+asyncpg", "+psycopg")
 
 
 def _resolve_database_url() -> str:
     settings = get_settings()
+    database_env_url = os.getenv("DATABASE_URL", "").strip()
     env_url = os.getenv("MYSQL_URL", "").strip()
-    candidate = settings.mysql_url or env_url or config.get_main_option("sqlalchemy.url")
+    candidate = settings.database_url or database_env_url or settings.mysql_url or env_url or config.get_main_option("sqlalchemy.url")
     return _normalize_alembic_url(candidate)
 
 
