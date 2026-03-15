@@ -20,6 +20,9 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://atendente3:atendente3@postgres:5432/atendente3}
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
+      WHATSAPP_GATEWAY_BASE_URL: ${WHATSAPP_GATEWAY_BASE_URL:-http://whatsapp-gateway:8090}
+      WHATSAPP_GATEWAY_SECRET: ${WHATSAPP_GATEWAY_SECRET:-replace-with-gateway-secret}
     volumes:
       - atendente3_backend_data:/data
     secrets:
@@ -37,15 +40,15 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-replace-with-32-plus-chars}
     networks:
       - internal
-      - orfinet3
+      - orfinet
     deploy:
       replicas: 1
       labels:
-        traefik.docker.network: ${TRAEFIK_NETWORK:-orfinet3}
+        traefik.docker.network: ${TRAEFIK_NETWORK:-orfinet}
         traefik.enable: "true"
         traefik.http.routers.atendente3-frontend.entrypoints: websecure
         traefik.http.routers.atendente3-frontend.priority: "1"
-        traefik.http.routers.atendente3-frontend.rule: Host(`${ATENDENTE3_HOST:-pulse.orfi.com.br}`) || Host(`atendente3.orfi.com.br`)
+        traefik.http.routers.atendente3-frontend.rule: Host(`${ATENDENTE3_HOST:-pulse.orfi.com.br}`)
         traefik.http.routers.atendente3-frontend.service: atendente3-frontend
         traefik.http.routers.atendente3-frontend.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencryptresolver}
         traefik.http.services.atendente3-frontend.loadbalancer.server.port: "3000"
@@ -56,27 +59,27 @@ services:
       ADMINER_DEFAULT_SERVER: postgres
     networks:
       - internal
-      - orfinet3
+      - orfinet
     deploy:
       replicas: 1
       labels:
-        traefik.docker.network: ${TRAEFIK_NETWORK:-orfinet3}
+        traefik.docker.network: ${TRAEFIK_NETWORK:-orfinet}
         traefik.enable: "true"
         traefik.http.middlewares.atendente3-dbadmin-ipallowlist.ipallowlist.sourcerange: ${ATENDENTE3_DBADMIN_ALLOWLIST:-201.75.189.147/32}
         traefik.http.routers.atendente3-dbadmin.entrypoints: websecure
         traefik.http.routers.atendente3-dbadmin.middlewares: atendente3-dbadmin-ipallowlist
         traefik.http.routers.atendente3-dbadmin.priority: "1"
-        traefik.http.routers.atendente3-dbadmin.rule: Host(`${ATENDENTE3_DBADMIN_HOST:-pulse-db.orfi.com.br}`) || Host(`atendente3-db.orfi.com.br`)
+        traefik.http.routers.atendente3-dbadmin.rule: Host(`${ATENDENTE3_DBADMIN_HOST:-pulse-db.orfi.com.br}`)
         traefik.http.routers.atendente3-dbadmin.service: atendente3-dbadmin
         traefik.http.routers.atendente3-dbadmin.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencryptresolver}
         traefik.http.services.atendente3-dbadmin.loadbalancer.server.port: "8080"
 
-  whatsapp-service:
-    image: ${WHATSAPP_SERVICE_IMAGE:-ghcr.io/ilki70/sdr/whatsapp-service:latest}
+  whatsapp-gateway:
+    image: ${WHATSAPP_GATEWAY_IMAGE:-ghcr.io/ilki70/sdr/whatsapp-gateway:latest}
     environment:
-      BACKEND_WEBHOOK_URL: ${BACKEND_WEBHOOK_URL:-http://backend:8000/api/v1/whatsapp/webhook}
-      WHATSAPP_DEFAULT_INBOX_REF: ${WHATSAPP_DEFAULT_INBOX_REF:-whatsapp-default}
-      WHATSAPP_WEBHOOK_SECRET: ${WHATSAPP_WEBHOOK_SECRET:-replace-with-integration-secret}
+      WHATSAPP_GATEWAY_PORT: "8090"
+      WHATSAPP_GATEWAY_DATA_DIR: /data
+      WHATSAPP_GATEWAY_SECRET: ${WHATSAPP_GATEWAY_SECRET:-replace-with-gateway-secret}
     volumes:
       - atendente3_whatsapp_data:/data
     networks:
@@ -88,7 +91,7 @@ networks:
   internal:
     driver: overlay
     attachable: true
-  orfinet3:
+  orfinet:
     external: true
 
 volumes:

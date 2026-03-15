@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     chatwoot_base_url: str = Field(default="", alias="CHATWOOT_BASE_URL")
     chatwoot_api_token: str = Field(default="", alias="CHATWOOT_API_TOKEN")
     chatwoot_webhook_secret: str = Field(default="", alias="CHATWOOT_WEBHOOK_SECRET")
+    backend_internal_url: str = Field(default="http://backend:8000", alias="BACKEND_INTERNAL_URL")
+    whatsapp_gateway_base_url: str = Field(default="http://whatsapp-gateway:8090", alias="WHATSAPP_GATEWAY_BASE_URL")
+    whatsapp_gateway_secret: str = Field(default="", alias="WHATSAPP_GATEWAY_SECRET")
 
     session_secret: str = Field(default="", alias="SESSION_SECRET")
     rate_limit_default_per_min: int = Field(default=100, alias="RATE_LIMIT_DEFAULT_PER_MIN")

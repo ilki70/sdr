@@ -40,6 +40,28 @@ type EvaluationRun = {
   created_at: string;
 };
 
+type WhatsAppGatewayStatus = {
+  connected: boolean;
+  session_status: string;
+  paired_phone: string | null;
+  qr_code_data_url: string | null;
+  qr_code_text: string | null;
+  last_event: string | null;
+  last_error: string | null;
+  updated_at: string | null;
+};
+
+type WhatsAppSessionStatus = {
+  integration_exists: boolean;
+  integration_id: string | null;
+  provider: string;
+  integration_status: string;
+  inbox_ref: string | null;
+  api_base_url: string | null;
+  config_json: Record<string, unknown> | null;
+  gateway: WhatsAppGatewayStatus;
+};
+
 type DashboardOverview = {
   client_count: number;
   product_count: number;
@@ -57,6 +79,19 @@ type DashboardOverview = {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [whatsApp, setWhatsApp] = useState<WhatsAppSessionStatus | null>(null);
+  const [whatsAppError, setWhatsAppError] = useState<string | null>(null);
+  const [isWhatsAppSaving, setIsWhatsAppSaving] = useState(false);
+
+  async function loadWhatsAppStatus() {
+    try {
+      const status = await fetchJson<WhatsAppSessionStatus>("/api/proxy/whatsapp/session");
+      setWhatsApp(status);
+      setWhatsAppError(null);
+    } catch (cause) {
+      setWhatsAppError(cause instanceof Error ? cause.message : "Falha ao carregar status do WhatsApp.");
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -73,10 +108,37 @@ export default function DashboardPage() {
       }
     }
     void load();
+    void loadWhatsAppStatus();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!whatsApp || !["pairing", "connecting"].includes(whatsApp.gateway.session_status)) {
+      return;
+    }
+    const handle = window.setInterval(() => {
+      void loadWhatsAppStatus();
+    }, 5000);
+    return () => window.clearInterval(handle);
+  }, [whatsApp]);
+
+  async function runWhatsAppAction(path: string) {
+    setIsWhatsAppSaving(true);
+    setWhatsAppError(null);
+    try {
+      const status = await fetchJson<WhatsAppSessionStatus>(path, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setWhatsApp(status);
+    } catch (cause) {
+      setWhatsAppError(cause instanceof Error ? cause.message : "Falha na operacao do WhatsApp.");
+    } finally {
+      setIsWhatsAppSaving(false);
+    }
+  }
 
   const cards = [
     { label: "Clientes", value: data?.client_count ?? 0 },
@@ -93,11 +155,85 @@ export default function DashboardPage() {
         <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--accent)]">Control Room</p>
         <h1 className="mt-3 text-3xl font-semibold">Dashboard operacional</h1>
         <p className="mt-2 text-sm text-white/70">
-          Referencia horaria fixa em Sao Paulo. Use este painel para ver setup comercial, atividade recente e resultado das avaliacoes automaticas.
+          Referencia horaria fixa em Sao Paulo. Use este painel para ver setup comercial, atividade recente, resultado das avaliacoes automaticas e o pareamento real do WhatsApp por QR code.
         </p>
       </section>
 
       {error ? <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p> : null}
+
+      <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(37,211,102,0.12),rgba(37,211,102,0.04))] p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.24em] text-[#7dffb4]">WhatsApp Gateway</p>
+            <h2 className="mt-2 text-2xl font-semibold">Pareamento por QR code</h2>
+            <p className="mt-2 max-w-2xl text-sm text-white/70">
+              O gateway em Go usa `whatsmeow`, persiste a sessao do dispositivo e encaminha mensagens recebidas para o backend responder com o agente ativo.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => void runWhatsAppAction("/api/proxy/whatsapp/bootstrap")}
+              disabled={isWhatsAppSaving}
+              className="rounded-full border border-white/12 px-4 py-2 text-sm text-white/85 disabled:opacity-60"
+            >
+              {whatsApp?.integration_exists ? "Reconfigurar gateway" : "Criar canal WhatsApp"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void runWhatsAppAction("/api/proxy/whatsapp/session/connect")}
+              disabled={isWhatsAppSaving}
+              className="rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-black disabled:opacity-60"
+            >
+              {isWhatsAppSaving ? "Processando..." : "Gerar QR code"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void runWhatsAppAction("/api/proxy/whatsapp/session/disconnect")}
+              disabled={isWhatsAppSaving || !whatsApp?.integration_exists}
+              className="rounded-full border border-white/12 px-4 py-2 text-sm text-white/85 disabled:opacity-60"
+            >
+              Desconectar
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="rounded-[24px] border border-white/10 bg-black/20 p-5">
+            <p className="text-[11px] uppercase tracking-wide text-white/40">Status da sessao</p>
+            <p className="mt-3 text-2xl font-semibold text-white">{whatsApp?.gateway.session_status || "indisponivel"}</p>
+            <div className="mt-4 space-y-2 text-sm text-white/70">
+              <p>Integracao: {whatsApp?.integration_exists ? whatsApp.inbox_ref || "whatsapp-primary" : "nao criada"}</p>
+              <p>Conectado: {whatsApp?.gateway.connected ? "sim" : "nao"}</p>
+              <p>Numero pareado: {whatsApp?.gateway.paired_phone || "aguardando"}</p>
+              <p>Ultimo evento: {whatsApp?.gateway.last_event || "-"}</p>
+              <p>Atualizado: {whatsApp?.gateway.updated_at ? formatDateTimeSP(whatsApp.gateway.updated_at) : "-"}</p>
+            </div>
+            {whatsAppError ? <p className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{whatsAppError}</p> : null}
+            {whatsApp?.gateway.last_error ? <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">{whatsApp.gateway.last_error}</p> : null}
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-black/20 p-5">
+            <p className="text-[11px] uppercase tracking-wide text-white/40">QR code</p>
+            <div className="mt-4 flex min-h-[320px] items-center justify-center rounded-[24px] border border-dashed border-white/15 bg-white/5 p-4">
+              {whatsApp?.gateway.qr_code_data_url ? (
+                <img
+                  src={whatsApp.gateway.qr_code_data_url}
+                  alt="QR code para conectar o WhatsApp"
+                  className="h-[280px] w-[280px] rounded-2xl bg-white p-3"
+                />
+              ) : (
+                <div className="max-w-md text-center text-sm leading-7 text-white/60">
+                  <p>1. Crie ou reconfigure o canal WhatsApp.</p>
+                  <p>2. Clique em `Gerar QR code`.</p>
+                  <p>3. Escaneie pelo WhatsApp no celular.</p>
+                  <p>4. Depois do pareamento, as mensagens recebidas entram no agente automaticamente.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {cards.map((card) => (

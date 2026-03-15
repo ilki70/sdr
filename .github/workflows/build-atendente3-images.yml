@@ -7,7 +7,7 @@ on:
     paths:
       - "backend/**"
       - "frontend/**"
-      - "whatsapp-service/**"
+      - "services/whatsapp-gateway/**"
       - ".github/workflows/build-atendente3-images.yml"
   workflow_dispatch:
 
@@ -58,7 +58,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/frontend:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/frontend:${{ github.sha }}
 
-  whatsapp-service:
+  whatsapp-gateway:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -73,8 +73,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
         with:
-          context: ./whatsapp-service
+          context: ./services/whatsapp-gateway
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/whatsapp-service:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/whatsapp-service:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/whatsapp-gateway:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/whatsapp-gateway:${{ github.sha }}

@@ -28,7 +28,7 @@ export default function IntegrationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [agentId, setAgentId] = useState("");
-  const [provider, setProvider] = useState("chatwoot");
+  const [provider, setProvider] = useState("whatsapp");
   const [inboxRef, setInboxRef] = useState("");
   const [apiBaseUrl, setApiBaseUrl] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
@@ -76,7 +76,7 @@ export default function IntegrationsPage() {
 
     setFormMode("create");
     setAgentId("");
-    setProvider("chatwoot");
+    setProvider("whatsapp");
     setInboxRef("");
     setApiBaseUrl("");
     setWebhookSecret("");
@@ -130,9 +130,7 @@ export default function IntegrationsPage() {
     <main className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
       <section className="rounded-[28px] border border-white/10 bg-white/5 p-6">
         <h1 className="text-2xl font-semibold">Integracoes</h1>
-        <p className="mt-2 text-sm text-white/70">
-          CRUD inicial para configurar Chatwoot e outros canais antes da integracao real por webhook.
-        </p>
+        <p className="mt-2 text-sm text-white/70">Use esta tela para vincular agentes aos canais. O QR e o status da sessao do WhatsApp ficam no dashboard.</p>
         {error ? <p className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p> : null}
         <div className="mt-6 space-y-3">
           <button
@@ -228,7 +226,7 @@ export default function IntegrationsPage() {
               value={inboxRef}
               onChange={(event) => setInboxRef(event.target.value)}
               className="w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-white outline-none"
-              placeholder="whatsapp-vinac"
+              placeholder="whatsapp-primary"
             />
           </label>
 
