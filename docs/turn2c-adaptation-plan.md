@@ -20,12 +20,12 @@ Adaptar o `sdr` para uso interno da equipe em operacao de consorcios com a Turn2
 2. A tela de knowledge precisa suportar curadoria de docs, URLs e videos por tema, agente e objetivo comercial.
 3. A tela de conversations precisa virar inbox operacional com takeover humano, notas, tags e proximos passos.
 4. A quality page precisa persistir revisoes e priorizar risco, conversao e compliance.
-5. Falta um painel de operacao ao vivo com fila de atendimentos e visao de escalonamento humano.
+5. Falta um painel de operacao ao vivo com fila viva, takeover humano e visao de escalonamento.
 6. Falta limpar a narrativa e os seeds do caso Vinac para um dominio interno mais neutro.
 
 ## Recommended MVP Phases
 ### Phase 1: Product Repositioning
-- Renomear narrativa interna do projeto para consorcios/Turn2C.
+- Renomear narrativa interna do produto para consorcios/Turn2C.
 - Atualizar prompts, seeds e telas para remover dependencia conceitual do caso Vinac.
 - Adicionar configs de agente focadas em:
   - qualificacao
