@@ -309,3 +309,30 @@
   - `python3 -m py_compile` nos arquivos backend alterados
   - `npm run typecheck` e `npm run build` no frontend
 - O rebase posterior precisou reconciliar a documentacao com o historico consolidado acima.
+
+## 2026-03-19
+- Corrigido o erro de frontend `Failed to execute 'text' on 'Response': body stream already read` em `frontend/lib/api.ts` ao ler o corpo da resposta uma unica vez e tratar erro via JSON/texto sem dupla leitura.
+- Reordenado o menu lateral em ordem de uso operacional:
+  - Dashboard
+  - Consorcios
+  - Personas
+  - Agents
+  - Products
+  - Knowledge
+  - Integrations
+  - Agent Lab
+  - Conversations
+  - Quality
+  - Clients
+  - Commissions
+- Diagnostico do deploy no Portainer:
+  - a stack estava apontando para a tag curta `9b9ec5f`
+  - o GHCR publica a tag longa `9b9ec5f17ba00bef803198ec967c802c79811cfb`
+  - a tag curta nao existe para pull e causava `No such image`
+- Foi criado o registry `ghcr` no Portainer com o PAT do GitHub e a stack `sdr` foi atualizada para a tag longa.
+- Validacao final em producao:
+  - `/`, `/login`, `/register`, `/consorcios`, `/consorcios/playbook`, `/consorcios/knowledge`, `/consorcios/inbox` -> `200`
+  - `/health` -> `200`
+- Pendencia aberta:
+  - `/api/auth/session` ainda responde `500`
+  - `login` e `register` retornam `400` em payload invalido, entao o frontend ja nao estoura a excecao de `body stream already read`, mas a sessao precisa de outro ajuste.

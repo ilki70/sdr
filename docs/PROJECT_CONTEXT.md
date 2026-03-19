@@ -18,6 +18,7 @@ Plataforma interna de operacao comercial com agentes de IA, backend FastAPI, fro
 - Evoluir o frontend para configurar comportamento do agente, ingerir conhecimento, acompanhar atendimentos em tempo real e separar o `consorcios studio` em subareas explicitas.
 - Manter a stack `sdr` em formato autossuficiente para edicao direta no Portainer Web Editor, preservando os volumes antigos e o fluxo de deploy versionado.
 - Manter o bootstrap local funcional enquanto a nova linha de produto evolui.
+- Manter o frontend resiliente a respostas nao-OK sem dupla leitura de body e preservar a navegacao do menu em ordem operacional de uso.
 
 ## Key References
 - Main overview: `/home/ilki/sdr/README.md`
@@ -30,3 +31,4 @@ Plataforma interna de operacao comercial com agentes de IA, backend FastAPI, fro
 - Ler `docs/WORKLOG.md` antes de editar para captar o estado mais recente.
 - Registrar progresso transiente no worklog, mantendo aqui apenas contexto duravel.
 - O foco atual e a adaptacao do `sdr` para um sistema interno de SDR/closer assistido para consorcios, com RAG de documentos e videos YouTube, monitoria de conversas, handoff humano quando necessario e stack `sdr` substituindo a antiga `atendente3`.
+- O deploy atual usa imagens GHCR com tag longa `9b9ec5f17ba00bef803198ec967c802c79811cfb`; a tag curta `9b9ec5f` nao existe para pull.
