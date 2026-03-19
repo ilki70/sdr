@@ -236,3 +236,19 @@
   - backend/frontend/gateway atualizados na `atendente3`
   - para isso, liberar acesso ao daemon Docker para o usuario atual ou executar o build/publicacao via CI
   - depois testar QR real e um roundtrip inbound/outbound de WhatsApp
+
+## 2026-03-19
+- Iniciado o reposicionamento do `sdr` para uso interno da equipe em consorcios/Turn2C.
+- Direcao definida:
+  - a Turn2C sera tratada como backoffice de fechamento
+  - a operacao comercial principal fica fora da plataforma, com agentes de IA, RAG e acompanhamento de conversas
+  - o MVP nao vai depender de automacao pesada de tela nem de API da Turn2C
+- Contexto duravel atualizado em [docs/PROJECT_CONTEXT.md](/home/ilki/sdr/docs/PROJECT_CONTEXT.md).
+- Criado o plano de adaptacao em [docs/turn2c-adaptation-plan.md](/home/ilki/sdr/docs/turn2c-adaptation-plan.md).
+- Principais lacunas mapeadas:
+  - configurador operacional de agente para consorcios
+  - knowledge studio com docs, URLs e YouTube organizados por tema/agente
+  - inbox/control room com takeover humano e notas
+  - quality persistente com foco em compliance e conversao
+- Proximo passo recomendado:
+  - implementar a primeira fatia do "consorcios studio" no frontend e expandir os schemas/backend para playbooks de agente e knowledge organizado
