@@ -42,10 +42,10 @@ def _enforce_grounding_rules(state: AgentState) -> None:
             reply,
         )
         if "entrada" in _fold(reply):
-            reply = f"{reply.rstrip()} Sobre entrada ou condicoes iniciais, o correto e confirmar pela proposta oficial da VINAC."
+            reply = f"{reply.rstrip()} Sobre entrada ou condicoes iniciais, o correto e confirmar pela proposta oficial."
 
     if ("seminovo" in folded_query or "idade" in folded_query) and "3 anos" in folded_context and "3 anos" not in folded_reply:
-        reply = f"{reply.rstrip()} Pelo contexto oficial VINAC usado aqui, o seminovo deve ter ate 3 anos."
+        reply = f"{reply.rstrip()} Pelo contexto oficial usado aqui, o seminovo deve ter ate 3 anos."
 
     if "adesao" in folded_query and "primeira parcela" in folded_context and "concorr" not in folded_reply:
         reply = f"{reply.rstrip()} Depois de pagar a primeira parcela, voce ja comeca a concorrer no grupo."
@@ -61,7 +61,7 @@ def _enforce_grounding_rules(state: AgentState) -> None:
         if "qual carro" not in _fold(reply):
             reply = f"{reply.rstrip()} Me diga qual carro voce busca e se existe alguma margem para aproximar da parcela minima."
         if "simul" not in _fold(reply):
-            reply = f"{reply.rstrip()} Se quiser, eu preparo uma simulacao dentro do menor intervalo oficial da VINAC."
+            reply = f"{reply.rstrip()} Se quiser, eu preparo uma simulacao dentro do intervalo oficial configurado no playbook."
 
     if "carta" in folded_query and "onde comprar" in folded_context and "onde comprar" not in folded_reply:
         reply = f"{reply.rstrip()} O contexto oficial tambem informa que voce tem liberdade para escolher onde comprar o veiculo."
@@ -182,6 +182,7 @@ async def compose_reply(state: AgentState) -> AgentState:
         "Se a pergunta for sobre carta de credito, cite que pode escolher outro modelo e onde comprar, conforme contexto. "
         "Se o orcamento estiver abaixo da faixa minima do site, reconheca isso de forma consultiva, cite a faixa minima oficial, "
         "evite encerrar a conversa cedo e faca uma pergunta objetiva sobre carro desejado, prazo ou margem para aproximar a parcela minima. "
+        "Use o playbook interno de consorcio configurado para este agente e nao dependa de nomes ou marcas antigas. "
         f"{persona_block}"
         f"Intento={state.intent}. "
         f"Historico={history_block}. "

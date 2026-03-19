@@ -272,9 +272,9 @@ export default function KnowledgePage() {
         body: JSON.stringify({ product_id: selectedProductId }),
       });
       await refreshKnowledgeState(selectedProductId);
-      setNotice("Base oficial da VINAC enviada para ingestao.");
+      setNotice("Base oficial enviada para ingestao.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Falha ao enfileirar base VINAC.");
+      setError(cause instanceof Error ? cause.message : "Falha ao enfileirar base oficial.");
     } finally {
       setIsSeedingVinac(false);
     }
@@ -350,9 +350,9 @@ export default function KnowledgePage() {
         body: JSON.stringify({ product_id: selectedProductId }),
       });
       await refreshKnowledgeState(selectedProductId);
-      setNotice("Laboratorio VINAC enfileirado.");
+      setNotice("Laboratorio de consorcios enfileirado.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Falha ao iniciar laboratorio VINAC.");
+      setError(cause instanceof Error ? cause.message : "Falha ao iniciar laboratorio de consorcios.");
     } finally {
       setIsRunningEvaluation(false);
     }
@@ -386,10 +386,10 @@ export default function KnowledgePage() {
           <div className="space-y-4">
             <p className="text-[11px] uppercase tracking-[0.26em] text-[var(--accent)]">Knowledge Ops</p>
             <div>
-              <h1 className="text-3xl font-semibold">RAG operacional e laboratório VINAC</h1>
+              <h1 className="text-3xl font-semibold">RAG operacional e laboratório de consórcios</h1>
               <p className="mt-2 max-w-2xl text-sm text-white/70">
                 Ingestao assíncrona, versionamento de fontes, diff entre versões e avaliação automatizada do agente com
-                cenários de venda da VINAC.
+                cenários de venda do playbook ativo.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -399,7 +399,7 @@ export default function KnowledgePage() {
                 disabled={!selectedProductId || isSeedingVinac}
                 className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-black disabled:opacity-60"
               >
-                {isSeedingVinac ? "Enfileirando..." : "Ingerir base oficial VINAC"}
+                {isSeedingVinac ? "Enfileirando..." : "Ingerir base oficial"}
               </button>
               <button
                 type="button"
@@ -407,7 +407,7 @@ export default function KnowledgePage() {
                 disabled={!selectedProductId || isRunningEvaluation}
                 className="rounded-full border border-[var(--accent)]/40 px-4 py-2 text-sm text-[var(--accent)] disabled:opacity-60"
               >
-                {isRunningEvaluation ? "Enfileirando lab..." : "Executar laboratório VINAC"}
+                {isRunningEvaluation ? "Enfileirando lab..." : "Executar laboratório"}
               </button>
               <button
                 type="button"
@@ -447,7 +447,7 @@ export default function KnowledgePage() {
               </p>
             ) : null}
             <p className="mt-4 text-sm text-white/70">
-              Caso de laboratório: <a href="https://vinac.com.br/" target="_blank" rel="noreferrer" className="text-[var(--accent)]">vinac.com.br</a>
+              Caso de laboratório: <a href="https://www.turn2c.com/aplicativo/b2b" target="_blank" rel="noreferrer" className="text-[var(--accent)]">Turn2C</a>
             </p>
           </div>
         </div>
@@ -662,7 +662,7 @@ export default function KnowledgePage() {
               </section>
 
               <section className="rounded-[30px] border border-white/10 bg-white/5 p-6">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Laboratório VINAC</p>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Laboratório de consórcios</p>
                 <div className="mt-4 rounded-[24px] border border-white/10 bg-black/20 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <strong className="text-sm">Última execução</strong>

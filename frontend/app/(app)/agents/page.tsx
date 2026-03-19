@@ -154,7 +154,7 @@ export default function AgentsPage() {
         <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--accent)]">Agent Studio</p>
         <h1 className="mt-3 text-3xl font-semibold">Atendentes do produto</h1>
         <p className="mt-2 max-w-3xl text-sm text-white/70">
-          Cadastre diversos atendentes, publique novas versoes e trate a Vinac como apenas um caso dentro do portfolio do tenant.
+          Cadastre diversos atendentes, publique novas versoes e trate qualquer operacao de consorcio como um caso dentro do portfolio do tenant.
         </p>
       </section>
 

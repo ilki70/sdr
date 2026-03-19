@@ -10,14 +10,18 @@ from app.schemas.agents import (
     AgentUpdateRequest,
     AgentVersionCreateRequest,
     AgentVersionResponse,
+    ConsorcioStudioResponse,
+    ConsorcioStudioUpdateRequest,
 )
 from app.services.agents import (
     create_agent,
     create_agent_version,
+    get_consorcio_studio_state,
     get_agent_or_none,
     list_agents,
     list_agent_versions,
     publish_agent_version,
+    update_consorcio_studio,
     update_agent,
 )
 
@@ -101,3 +105,44 @@ async def post_publish_agent_version(
     if not version:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent version not found")
     return AgentVersionResponse.model_validate(version)
+
+
+@router.get("/{agent_id}/consorcio-studio", response_model=ConsorcioStudioResponse)
+async def get_consorcio_studio(
+    agent_id: str,
+    context: RequestContext = Depends(get_request_context),
+    db: AsyncSession = Depends(get_db_session),
+) -> ConsorcioStudioResponse:
+    try:
+        agent, active_version, playbook, knowledge = await get_consorcio_studio_state(db, context.tenant_id, agent_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found") from None
+    return ConsorcioStudioResponse(
+        agent=AgentResponse.model_validate(agent),
+        active_version=AgentVersionResponse.model_validate(active_version) if active_version else None,
+        playbook=playbook,
+        knowledge=knowledge,
+    )
+
+
+@router.patch("/{agent_id}/consorcio-studio", response_model=ConsorcioStudioResponse)
+async def patch_consorcio_studio(
+    agent_id: str,
+    payload: ConsorcioStudioUpdateRequest,
+    context: RequestContext = Depends(get_request_context),
+    db: AsyncSession = Depends(get_db_session),
+) -> ConsorcioStudioResponse:
+    agent = await get_agent_or_none(db, context.tenant_id, agent_id)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+    version = await update_consorcio_studio(db, context.tenant_id, context.user_id, agent, payload)
+    refreshed = await get_consorcio_studio_state(db, context.tenant_id, agent_id)
+    agent_ref, active_version, playbook, knowledge = refreshed
+    if not active_version:
+        active_version = version
+    return ConsorcioStudioResponse(
+        agent=AgentResponse.model_validate(agent_ref),
+        active_version=AgentVersionResponse.model_validate(active_version) if active_version else None,
+        playbook=playbook,
+        knowledge=knowledge,
+    )

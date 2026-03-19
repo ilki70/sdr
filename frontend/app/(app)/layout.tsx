@@ -4,6 +4,7 @@ import { BRAND_NAME } from "@/lib/brand";
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/agents", label: "Agents" },
+  { href: "/consorcios", label: "Consorcios" },
   { href: "/clients", label: "Clients" },
   { href: "/products", label: "Products" },
   { href: "/knowledge", label: "Knowledge" },

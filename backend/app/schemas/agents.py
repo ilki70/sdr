@@ -71,3 +71,51 @@ class AgentVersionResponse(OrmModel):
 class AgentDetailResponse(BaseModel):
     agent: AgentResponse
     versions: list[AgentVersionResponse]
+
+
+class ConsorcioQualificationBlock(BaseModel):
+    intent: str = Field(default="qualificar lead de consorcio")
+    questions: list[str] = Field(default_factory=list)
+    disqualifiers: list[str] = Field(default_factory=list)
+    required_fields: list[str] = Field(default_factory=list)
+
+
+class ConsorcioObjectionBlock(BaseModel):
+    objection: str = Field(min_length=2, max_length=120)
+    response: str = Field(min_length=2, max_length=500)
+
+
+class ConsorcioPlaybookBlock(BaseModel):
+    positioning: str = Field(min_length=20)
+    tone: str = Field(default="consultivo", min_length=2, max_length=80)
+    qualification: ConsorcioQualificationBlock = Field(default_factory=ConsorcioQualificationBlock)
+    objections: list[ConsorcioObjectionBlock] = Field(default_factory=list)
+    compliance_rules: list[str] = Field(default_factory=list)
+    handoff_rules: list[str] = Field(default_factory=list)
+    follow_up_rules: list[str] = Field(default_factory=list)
+
+
+class ConsorcioKnowledgeBlock(BaseModel):
+    product_focus: list[str] = Field(default_factory=list)
+    priority_sources: list[str] = Field(default_factory=list)
+    official_domains: list[str] = Field(default_factory=list)
+    youtube_sources: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+
+class ConsorcioStudioResponse(BaseModel):
+    agent: AgentResponse
+    active_version: AgentVersionResponse | None
+    playbook: ConsorcioPlaybookBlock
+    knowledge: ConsorcioKnowledgeBlock
+
+
+class ConsorcioStudioUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=140)
+    description: str | None = None
+    prompt_system: str = Field(min_length=20)
+    playbook: ConsorcioPlaybookBlock
+    knowledge: ConsorcioKnowledgeBlock = Field(default_factory=ConsorcioKnowledgeBlock)
+    tool_config_json: dict[str, Any] = Field(default_factory=dict)
+    channel_config_json: dict[str, Any] = Field(default_factory=dict)
+    publish: bool = True

@@ -6,7 +6,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.entities import Agent, AgentVersion, BotPersona, PersonaVersion
-from app.schemas.agents import AgentCreateRequest, AgentUpdateRequest, AgentVersionCreateRequest
+from app.schemas.agents import (
+    AgentCreateRequest,
+    AgentUpdateRequest,
+    AgentVersionCreateRequest,
+    ConsorcioKnowledgeBlock,
+    ConsorcioPlaybookBlock,
+    ConsorcioStudioUpdateRequest,
+)
 
 
 async def list_agents(db: AsyncSession, tenant_id: str) -> list[Agent]:
@@ -47,6 +54,102 @@ async def list_agent_versions(db: AsyncSession, tenant_id: str, agent_id: str) -
         .order_by(AgentVersion.version_no.desc())
     )
     return list(result.scalars().all())
+
+
+def _default_playbook_data() -> dict:
+    return {
+        "positioning": (
+            "Voce conduz a qualificacao de consorcio com postura consultiva, "
+            "explicando o processo com clareza, sem prometer contemplacao e preparando o handoff humano."
+        ),
+        "tone": "consultivo",
+        "qualification": {
+            "intent": "qualificar lead de consorcio",
+            "questions": [
+                "Qual bem ou objetivo voce quer viabilizar com consorcio?",
+                "Qual faixa de parcela cabe no seu planejamento hoje?",
+                "Voce quer entrada mais rapida, menor parcela ou maior previsibilidade?",
+            ],
+            "disqualifiers": [
+                "Sem interesse real no planejamento",
+                "Apenas curiosidade sem prazo ou objetivo",
+            ],
+            "required_fields": ["objetivo", "faixa_parcela", "prazo", "urgencia"],
+        },
+        "objections": [
+            {
+                "objection": "tempo de contemplacao",
+                "response": "Explique que contemplacao nao e garantida e que o foco e alinhar expectativa, prazo e estrategia comercial oficial.",
+            },
+            {
+                "objection": "taxa ou custo",
+                "response": "Explique que o custo precisa ser confirmado na proposta oficial e que a comparacao correta considera parcela, prazo e objetivo.",
+            },
+        ],
+        "compliance_rules": [
+            "Nao prometer contemplacao",
+            "Nao afirmar retorno financeiro",
+            "Nao inventar taxa, entrada ou prazo",
+            "Escalar para humano quando houver duvida contratual",
+        ],
+        "handoff_rules": [
+            "Encaminhar para humano quando o lead estiver pronto para simulacao",
+            "Escalar leads com exigencia de proposta formal",
+            "Manter registro do motivo do handoff",
+        ],
+        "follow_up_rules": [
+            "Retomar leads com prazo definido e sem resposta",
+            "Reforcar proximo passo objetivo em ate 24 horas",
+            "Usar follow-up consultivo, nao insistente",
+        ],
+    }
+
+
+def _default_knowledge_data() -> dict:
+    return {
+        "product_focus": ["consorcio", "turn2c", "operacao comercial interna"],
+        "priority_sources": [],
+        "official_domains": [],
+        "youtube_sources": [],
+        "tags": ["consorcio", "playbook", "hand-off", "qualificacao"],
+    }
+
+
+def _default_tool_config() -> dict:
+    return {"rag_enabled": True, "web_allowlist_enabled": True, "consorcio_mode": True}
+
+
+def _default_channel_config() -> dict:
+    return {"default_channel": "whatsapp", "allowed_channels": ["whatsapp", "lab"]}
+
+
+def _merge_consorcio_data(base: dict, override: dict) -> dict:
+    merged = dict(base)
+    merged.update({key: value for key, value in override.items() if value is not None})
+    return merged
+
+
+def _build_playbook_model(version: AgentVersion | None) -> ConsorcioPlaybookBlock:
+    payload = _merge_consorcio_data(_default_playbook_data(), version.policy_json if version else {})
+    payload["qualification"] = _merge_consorcio_data(
+        _default_playbook_data()["qualification"],
+        payload.get("qualification") or {},
+    )
+    payload["objections"] = payload.get("objections") or []
+    payload["compliance_rules"] = payload.get("compliance_rules") or []
+    payload["handoff_rules"] = payload.get("handoff_rules") or []
+    payload["follow_up_rules"] = payload.get("follow_up_rules") or []
+    return ConsorcioPlaybookBlock.model_validate(payload)
+
+
+def _build_knowledge_model(version: AgentVersion | None) -> ConsorcioKnowledgeBlock:
+    payload = _merge_consorcio_data(_default_knowledge_data(), version.knowledge_config_json if version else {})
+    payload["product_focus"] = payload.get("product_focus") or []
+    payload["priority_sources"] = payload.get("priority_sources") or []
+    payload["official_domains"] = payload.get("official_domains") or []
+    payload["youtube_sources"] = payload.get("youtube_sources") or []
+    payload["tags"] = payload.get("tags") or []
+    return ConsorcioKnowledgeBlock.model_validate(payload)
 
 
 async def _resolve_persona_version_no(
@@ -124,19 +227,22 @@ async def ensure_default_agent_for_tenant(
     )
     persona = result.scalar_one_or_none()
     payload = AgentCreateRequest(
-        name="Vinac Consorcios",
-        slug="vinac-consorcios",
-        description="Agente inicial migrado do tenant atual.",
+        name="Consorcios Operacao",
+        slug="consorcios-operacao",
+        description="Agente inicial da operacao interna de consorcios.",
         persona_id=persona.id if persona else None,
         persona_version_no=persona.active_version_no if persona else None,
         prompt_system=(
-            "Voce e o agente comercial inicial deste tenant. "
+            "Voce e o agente comercial inicial deste tenant para operacao interna de consorcios. "
             "Atenda com tom consultivo, claro, sustentado pelo contexto oficial e orientado a proximo passo."
         ),
-        policy_json={"rules": ["use contexto oficial", "nao invente fatos", "sempre proponha proximo passo"]},
-        tool_config_json={"rag_enabled": True, "web_allowlist_enabled": True},
-        knowledge_config_json={"scope": "tenant_default"},
-        channel_config_json={"default_channel": "lab"},
+        policy_json={
+            "positioning": "qualificacao e handoff de leads de consorcio",
+            "rules": ["use contexto oficial", "nao invente fatos", "sempre proponha proximo passo"],
+        },
+        tool_config_json={"rag_enabled": True, "web_allowlist_enabled": True, "consorcio_mode": True},
+        knowledge_config_json={"scope": "consorcio_default"},
+        channel_config_json={"default_channel": "whatsapp"},
         publish=True,
     )
     return await create_agent(db, tenant_id, user_id, payload)
@@ -292,3 +398,70 @@ async def get_persona_version_for_agent(
         )
     )
     return result.scalar_one_or_none()
+
+
+async def get_consorcio_studio_state(
+    db: AsyncSession,
+    tenant_id: str,
+    agent_id: str,
+) -> tuple[Agent, AgentVersion | None, ConsorcioPlaybookBlock, ConsorcioKnowledgeBlock]:
+    agent = await get_agent_or_none(db, tenant_id, agent_id)
+    if not agent:
+        raise ValueError("Agent not found")
+    active_version = None
+    if agent.active_version_no is not None:
+        result = await db.execute(
+            select(AgentVersion).where(
+                AgentVersion.tenant_id == tenant_id,
+                AgentVersion.agent_id == agent.id,
+                AgentVersion.version_no == agent.active_version_no,
+            )
+        )
+        active_version = result.scalar_one_or_none()
+    return agent, active_version, _build_playbook_model(active_version), _build_knowledge_model(active_version)
+
+
+async def update_consorcio_studio(
+    db: AsyncSession,
+    tenant_id: str,
+    user_id: str,
+    agent: Agent,
+    payload: ConsorcioStudioUpdateRequest,
+) -> AgentVersion:
+    current_version = await get_published_agent_version_or_none(db, tenant_id, agent.id)
+    if payload.name or payload.description is not None:
+        await update_agent(
+            db,
+            agent,
+            AgentUpdateRequest(
+                name=payload.name,
+                description=payload.description,
+                slug=None,
+                status=None,
+            ),
+        )
+
+    playbook_json = payload.playbook.model_dump()
+    knowledge_json = _merge_consorcio_data(
+        _default_knowledge_data() if current_version is None else current_version.knowledge_config_json,
+        payload.knowledge.model_dump(),
+    )
+    tool_config_json = _merge_consorcio_data(
+        _default_tool_config() if current_version is None else current_version.tool_config_json,
+        payload.tool_config_json,
+    )
+    channel_config_json = _merge_consorcio_data(
+        _default_channel_config() if current_version is None else current_version.channel_config_json,
+        payload.channel_config_json,
+    )
+    version_payload = AgentVersionCreateRequest(
+        persona_id=current_version.persona_id if current_version else None,
+        persona_version_no=current_version.persona_version_no if current_version else None,
+        prompt_system=payload.prompt_system,
+        policy_json=playbook_json,
+        tool_config_json=tool_config_json,
+        knowledge_config_json=knowledge_json,
+        channel_config_json=channel_config_json,
+        publish=payload.publish,
+    )
+    return await create_agent_version(db, tenant_id, user_id, agent, version_payload)
