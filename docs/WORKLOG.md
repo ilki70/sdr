@@ -1,5 +1,22 @@
 # Worklog
 
+## 2026-03-19
+- Evolucao do `sdr` para o cenario de consorcios/Turn2C foi refinada em tres subareas explicitas no frontend:
+  - `playbook`
+  - `knowledge`
+  - `inbox`
+- O hub de `consorcios` agora encaminha para essas telas dedicadas, enquanto o `playbook` publica a configuracao do agente e o `knowledge` concentra RAG, ingestao de fontes e laboratorio.
+- Adicionada a rota `inbox` para acompanhamento de conversas com filtros, detalhe do atendimento e foco em handoff humano.
+- Criado um novo manifesto de deploy em `deploy/sdr`, com nomes de router/servico em `sdr` e volumes preservados dos dados da stack antiga `atendente3`.
+- Validacao local executada com sucesso:
+  - `python3 -m py_compile` nos arquivos backend alterados
+  - `npm run typecheck` no frontend
+  - `npm run build` no frontend
+- Proximo passo:
+  - versionar e publicar a mudanca
+  - atualizar o Portainer para a stack `sdr`
+  - remover a dependencia operacional do nome antigo `atendente3`
+
 ## 2026-03-10
 - Clonado o repositorio `sdr` em `/home/ilki/sdr`.
 - Criados `docs/PROJECT_CONTEXT.md` e `docs/WORKLOG.md` para persistencia de contexto local.

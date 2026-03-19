@@ -1,0 +1,107 @@
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-atendente3}
+      POSTGRES_USER: ${POSTGRES_USER:-atendente3}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atendente3}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    deploy:
+      replicas: 1
+
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/ilki70/sdr/backend:latest}
+    environment:
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
+      OPENAI_API_KEY_FILE: /run/secrets/atendente3_openai_api_key
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://atendente3:atendente3@postgres:5432/atendente3}
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
+      WHATSAPP_GATEWAY_BASE_URL: ${WHATSAPP_GATEWAY_BASE_URL:-http://whatsapp-gateway:8090}
+      WHATSAPP_GATEWAY_SECRET: ${WHATSAPP_GATEWAY_SECRET:-replace-with-gateway-secret}
+    volumes:
+      - backend_data:/data
+    secrets:
+      - atendente3_openai_api_key
+    networks:
+      - internal
+    deploy:
+      replicas: 1
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/ilki70/sdr/frontend:latest}
+    environment:
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://pulse.orfi.com.br}
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
+      SESSION_SECRET: ${SESSION_SECRET:-replace-with-32-plus-chars}
+    networks:
+      - internal
+      - orfinet
+    deploy:
+      replicas: 1
+      labels:
+        traefik.docker.network: ${TRAEFIK_NETWORK:-orfinet}
+        traefik.enable: "true"
+        traefik.http.routers.sdr-frontend.entrypoints: websecure
+        traefik.http.routers.sdr-frontend.priority: "1"
+        traefik.http.routers.sdr-frontend.rule: Host(`${SDR_HOST:-pulse.orfi.com.br}`)
+        traefik.http.routers.sdr-frontend.service: sdr-frontend
+        traefik.http.routers.sdr-frontend.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencryptresolver}
+        traefik.http.services.sdr-frontend.loadbalancer.server.port: "3000"
+
+  db-admin:
+    image: adminer:4.8.1@sha256:34d37131366c5aa84e1693dbed48593ed6f95fb450b576c1a7a59d3a9c9e8802
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    networks:
+      - internal
+      - orfinet
+    deploy:
+      replicas: 1
+      labels:
+        traefik.docker.network: ${TRAEFIK_NETWORK:-orfinet}
+        traefik.enable: "true"
+        traefik.http.middlewares.sdr-dbadmin-ipallowlist.ipallowlist.sourcerange: ${SDR_DBADMIN_ALLOWLIST:-201.75.189.147/32}
+        traefik.http.routers.sdr-dbadmin.entrypoints: websecure
+        traefik.http.routers.sdr-dbadmin.middlewares: sdr-dbadmin-ipallowlist
+        traefik.http.routers.sdr-dbadmin.priority: "1"
+        traefik.http.routers.sdr-dbadmin.rule: Host(`${SDR_DBADMIN_HOST:-pulse-db.orfi.com.br}`)
+        traefik.http.routers.sdr-dbadmin.service: sdr-dbadmin
+        traefik.http.routers.sdr-dbadmin.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencryptresolver}
+        traefik.http.services.sdr-dbadmin.loadbalancer.server.port: "8080"
+
+  whatsapp-gateway:
+    image: ${WHATSAPP_GATEWAY_IMAGE:-ghcr.io/ilki70/sdr/whatsapp-gateway:latest}
+    environment:
+      WHATSAPP_GATEWAY_PORT: "8090"
+      WHATSAPP_GATEWAY_DATA_DIR: /data
+      WHATSAPP_GATEWAY_SECRET: ${WHATSAPP_GATEWAY_SECRET:-replace-with-gateway-secret}
+    volumes:
+      - whatsapp_gateway_data:/data
+    networks:
+      - internal
+    deploy:
+      replicas: 1
+
+networks:
+  internal:
+    driver: overlay
+    attachable: true
+  orfinet:
+    external: true
+
+volumes:
+  backend_data:
+    name: atendente3_backend_data
+  postgres_data:
+    name: atendente3_postgres_data
+  whatsapp_gateway_data:
+    name: sdr_whatsapp_gateway_data
+
+secrets:
+  atendente3_openai_api_key:
+    external: true
