@@ -15,20 +15,18 @@ Plataforma interna de operacao comercial com agentes de IA, backend FastAPI, fro
 ## Current Priorities
 - Reposicionar o produto para uso interno da equipe em consorcios/Turn2C.
 - Preservar o contexto multi-tenant entre frontend, backend e banco.
-- Evoluir o frontend para configurar comportamento do agente, ingerir conhecimento, acompanhar atendimentos em tempo real e separar o `consorcios studio` em subareas explicitas.
-- Manter a stack `sdr` em formato autossuficiente para edicao direta no Portainer Web Editor, preservando os volumes antigos e o fluxo de deploy versionado.
+- Evoluir o frontend para configurar comportamento do agente, ingerir conhecimento e acompanhar atendimentos em tempo real.
 - Manter o bootstrap local funcional enquanto a nova linha de produto evolui.
-- Manter o frontend resiliente a respostas nao-OK sem dupla leitura de body e preservar a navegacao do menu em ordem operacional de uso.
+- Manter um caminho administrativo de recuperacao de acesso para usuarios/tenants, sem expor reset publico irrestrito.
 
 ## Key References
 - Main overview: `/home/ilki/sdr/README.md`
 - Product/backend docs: `/home/ilki/sdr/docs/`
 - Frontend app: `/home/ilki/sdr/frontend`
 - Backend app: `/home/ilki/sdr/backend`
-- Deploy stack: `/home/ilki/sdr/deploy/sdr`
+- Deploy stack: `/home/ilki/sdr/deploy/atendente3`
 
 ## Notes For Future Sessions
 - Ler `docs/WORKLOG.md` antes de editar para captar o estado mais recente.
 - Registrar progresso transiente no worklog, mantendo aqui apenas contexto duravel.
-- O foco atual e a adaptacao do `sdr` para um sistema interno de SDR/closer assistido para consorcios, com RAG de documentos e videos YouTube, monitoria de conversas, handoff humano quando necessario e stack `sdr` substituindo a antiga `atendente3`.
-- O deploy atual usa imagens GHCR com tag longa `9b9ec5f17ba00bef803198ec967c802c79811cfb`; a tag curta `9b9ec5f` nao existe para pull.
+- O foco atual e a adaptacao do `sdr` para um sistema interno de SDR/closer assistido para consorcios, com RAG de documentos e videos YouTube, monitoria de conversas e handoff humano quando necessario.

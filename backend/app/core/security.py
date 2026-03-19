@@ -35,6 +35,15 @@ async def get_request_context(
     x_request_id: str | None = Header(default="generated-locally"),
     db: AsyncSession = Depends(get_db_session),
 ) -> RequestContext:
+    return await resolve_request_context(db, x_user_id, x_tenant_id, x_request_id)
+
+
+async def resolve_request_context(
+    db: AsyncSession,
+    x_user_id: str | None,
+    x_tenant_id: str | None,
+    x_request_id: str = "generated-locally",
+) -> RequestContext:
     user_id = _ensure_header(x_user_id, "X-User-Id")
     tenant_id = _ensure_header(x_tenant_id, "X-Tenant-Id")
     request_id = _ensure_header(x_request_id, "X-Request-Id")

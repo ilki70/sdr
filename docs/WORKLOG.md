@@ -1,34 +1,17 @@
 # Worklog
 
 ## 2026-03-19
-- Evolucao do `sdr` para o cenario de consorcios/Turn2C foi refinada em tres subareas explicitas no frontend:
-  - `playbook`
-  - `knowledge`
-  - `inbox`
-- O hub de `consorcios` agora encaminha para essas telas dedicadas, enquanto o `playbook` publica a configuracao do agente e o `knowledge` concentra RAG, ingestao de fontes e laboratorio.
-- Adicionada a rota `inbox` para acompanhamento de conversas com filtros, detalhe do atendimento e foco em handoff humano.
-- Criado um novo manifesto de deploy em `deploy/sdr`, com nomes de router/servico em `sdr` e volumes preservados dos dados da stack antiga `atendente3`.
-- A stack `deploy/sdr/stack.yml` foi ajustada com `version: "3.9"` e o README passou a explicitar o uso do Portainer Web Editor para edição direta do YAML.
-- A tentativa de autenticar no Portainer com a credencial recebida nesta sessao nao passou: a API respondeu `403` inclusive em `api/auth` e `api/status`, entao o bloqueio da atualizacao da stack continua sendo acesso administrativo ao painel.
-- Validacao local executada com sucesso:
-  - `python3 -m py_compile` nos arquivos backend alterados
-  - `npm run typecheck` no frontend
-  - `npm run build` no frontend
-- A stack `sdr` foi finalmente atualizada no Portainer via API autenticada com `portainer_api_key` e CSRF, trocando os servicos para os tags SHA do commit `87bc7e52619df39f8b0887e9461273483df89208`.
-- Smoke publico final ok em:
-  - `/consorcios`
-  - `/consorcios/playbook`
-  - `/consorcios/knowledge`
-  - `/consorcios/inbox`
-  - `/health`
-- Verificacao geral posterior no endereco publico mostrou alinhamento visual e de navegacao com o produto atual, mas com falhas de runtime em auth:
-  - `/api/auth/session` -> `500`
-  - `/api/auth/login` com payload valido -> `500`
-  - `/api/auth/register` com payload valido -> `500`
-  - `/api/auth/providers` -> `404` (esperado, nao ha contrato NextAuth/providers nessa base)
+- Validação pública da stack `sdr` mostrou que o hub novo de consórcios ja esta ativo em `https://pulse.orfi.com.br/consorcios` com HTTP `200`.
+- As subrotas novas ainda nao estao publicadas na stack em producao:
+  - `/consorcios/playbook` -> `404`
+  - `/consorcios/knowledge` -> `404`
+  - `/consorcios/inbox` -> `404`
+  - `/health` -> `404`
+- O workflow do GitHub Actions para o commit `87bc7e5` concluiu com `success`, entao o bloqueio agora e de redeploy/stack e nao de build.
+- Tentativa de autenticacao automatica no Portainer para atualizar a stack `sdr` nao passou com a credencial disponivel nesta sessao.
 - Proximo passo:
-  - manter o fluxo de edicao direta do YAML no Portainer para ajustes rápidos
-  - quando houver novo build, voltar a alinhar a stack com os tags de imagem desejados
+  - atualizar a stack `sdr` no Portainer para puxar as imagens novas e reaplicar as rotas
+  - repetir o smoke em `/consorcios/playbook`, `/consorcios/knowledge`, `/consorcios/inbox` e `/health`
 
 ## 2026-03-10
 - Clonado o repositorio `sdr` em `/home/ilki/sdr`.
@@ -258,13 +241,13 @@
 - A implementacao real de WhatsApp voltou para o codigo e para o deploy versionado.
 - Gateway Go e frontend ja passaram em build local com toolchains portateis.
 - Backend tambem passou em import/runtime real com Python compativel.
+- O workflow GitHub Actions `Build atendente3 images` do commit `73c6774` concluiu com sucesso para `backend`, `frontend` e `whatsapp-gateway`.
 - Ainda nao foi feito rollout nem smoke end-to-end em stack real.
 
 ## Next Recommended Step
 - Fazer o build das imagens e o rollout da stack real:
-  - imagem do gateway `services/whatsapp-gateway`
   - backend/frontend/gateway atualizados na `atendente3`
-  - para isso, liberar acesso ao daemon Docker para o usuario atual ou executar o build/publicacao via CI
+  - usar as imagens publicadas pela CI a partir do commit `73c6774`
   - depois testar QR real e um roundtrip inbound/outbound de WhatsApp
 
 ## 2026-03-19
@@ -275,6 +258,17 @@
   - o MVP nao vai depender de automacao pesada de tela nem de API da Turn2C
 - Contexto duravel atualizado em [docs/PROJECT_CONTEXT.md](/home/ilki/sdr/docs/PROJECT_CONTEXT.md).
 - Criado o plano de adaptacao em [docs/turn2c-adaptation-plan.md](/home/ilki/sdr/docs/turn2c-adaptation-plan.md).
+
+## 2026-03-19
+- Adicionado reset administrativo de usuario no `sdr` para recuperar acesso sem depender de login valido:
+  - backend ganhou o endpoint `POST /api/v1/auth/admin/reset-user-password`
+  - frontend ganhou proxy `POST /api/auth/admin/reset-user-password`
+  - o reset aceita chave de recuperacao via header `X-Admin-Reset-Key` ou, quando inexistente, exige contexto autenticado `owner/admin`
+  - o fluxo preserva tenant e membership, atualizando apenas a senha e criando vinculo se faltar
+- Adicionado script reutilizavel em `backend/scripts/reset_user_password.py` para operacao assistida por tenant/email/senha.
+- O deploy versionado passou a expor `ADMIN_RESET_SECRET` como variavel de recuperacao.
+- Proximo passo:
+  - publicar a nova imagem, ligar uma chave temporaria de recuperacao no Portainer e usar o reset para a conta `ilki70@gmail.com`
 - Principais lacunas mapeadas:
   - configurador operacional de agente para consorcios
   - knowledge studio com docs, URLs e YouTube organizados por tema/agente
@@ -282,57 +276,65 @@
   - quality persistente com foco em compliance e conversao
 - Proximo passo recomendado:
   - implementar a primeira fatia do "consorcios studio" no frontend e expandir os schemas/backend para playbooks de agente e knowledge organizado
-## 2026-03-19
-- Evolucao do `sdr` para o cenario de consorcios/Turn2C foi refinada em tres subareas explicitas no frontend:
-  - `playbook`
-  - `knowledge`
-  - `inbox`
-- O hub de `consorcios` agora encaminha para essas telas dedicadas, enquanto o `playbook` publica a configuracao do agente e o `knowledge` concentra RAG, ingestao de fontes e laboratorio.
-- Adicionada a rota `inbox` para acompanhamento de conversas com filtros, detalhe do atendimento e foco em handoff humano.
-- Criado um novo manifesto de deploy em `deploy/sdr`, com nomes de router/servico em `sdr` e volumes preservados dos dados da stack antiga `atendente3`.
-- Validacao local executada com sucesso:
-  - `python3 -m py_compile` nos arquivos backend alterados
-  - `npm run typecheck` no frontend
-  - `npm run build` no frontend
-- Proximo passo:
-  - versionar e publicar a mudanca
-  - atualizar o Portainer para a stack `sdr`
-  - remover a dependencia operacional do nome antigo `atendente3`
 
-## 2026-03-19
-- Revisao e consolidacao da linha `Turn2C` para o `sdr`:
-  - o produto passou a ser tratado explicitamente como uso interno da equipe
-  - a estrategia de operacao interna foi detalhada em `docs/turn2c-adaptation-plan.md`
-  - o novo `consorcios studio` foi separado em `playbook`, `knowledge` e `inbox`
-  - a stack versionada foi renomeada para `sdr` com preservacao dos volumes antigos da `atendente3`
-- Validacoes executadas:
-  - `python3 -m py_compile` nos arquivos backend alterados
-  - `npm run typecheck` e `npm run build` no frontend
-- O rebase posterior precisou reconciliar a documentacao com o historico consolidado acima.
+## 2026-03-15
+- Tentado rollout da nova stack `atendente3` pelo Portainer usando as imagens publicadas pela CI em `ghcr.io/ilki70/sdr/{backend,frontend,whatsapp-gateway}:latest`.
+- A atualizacao de stack foi aceita pelo Portainer e os servicos chegaram a ser recriados com a nova composicao (`backend`, `frontend`, `whatsapp-gateway`, `postgres`, `db-admin`).
+- O rollout nao estabilizou:
+  - os workers do Swarm rejeitaram `backend`, `frontend` e `whatsapp-gateway` com erro `No such image` para as imagens `ghcr.io/ilki70/sdr/*:latest`
+  - o frontend publico em `https://pulse.orfi.com.br` caiu em `404 page not found` enquanto os servicos novos estavam rejeitados
+- Acao corretiva executada no mesmo turno:
+  - rollback imediato da stack `atendente3` para o compose anterior baseado em `atendente3/backend:latest`, `atendente3/frontend:latest` e `atendente3/whatsapp-service:latest`
+  - validado via Portainer que todos os servicos antigos voltaram para `running`
+  - smoke publico restaurado com `200` em `/` e `/login` em `https://pulse.orfi.com.br`
 
-## 2026-03-19
-- Corrigido o erro de frontend `Failed to execute 'text' on 'Response': body stream already read` em `frontend/lib/api.ts` ao ler o corpo da resposta uma unica vez e tratar erro via JSON/texto sem dupla leitura.
-- Reordenado o menu lateral em ordem de uso operacional:
-  - Dashboard
-  - Consorcios
-  - Personas
-  - Agents
-  - Products
-  - Knowledge
-  - Integrations
-  - Agent Lab
-  - Conversations
-  - Quality
-  - Clients
-  - Commissions
-- Diagnostico do deploy no Portainer:
-  - a stack estava apontando para a tag curta `9b9ec5f`
-  - o GHCR publica a tag longa `9b9ec5f17ba00bef803198ec967c802c79811cfb`
-  - a tag curta nao existe para pull e causava `No such image`
-- Foi criado o registry `ghcr` no Portainer com o PAT do GitHub e a stack `sdr` foi atualizada para a tag longa.
-- Validacao final em producao:
-  - `/`, `/login`, `/register`, `/consorcios`, `/consorcios/playbook`, `/consorcios/knowledge`, `/consorcios/inbox` -> `200`
-  - `/health` -> `200`
-- Pendencia aberta:
-  - `/api/auth/session` ainda responde `500`
-  - `login` e `register` retornam `400` em payload invalido, entao o frontend ja nao estoura a excecao de `body stream already read`, mas a sessao precisa de outro ajuste.
+## Current Status
+- A producao foi restaurada e o `pulse.orfi.com.br` voltou a responder normalmente.
+- A implementacao nova com `whatsapp-gateway` continua pronta no codigo e validada localmente/na CI.
+- O bloqueio real para deploy agora e de distribuicao de imagem no ambiente Swarm:
+  - ou as imagens do GHCR estao privadas/inacessiveis para os workers
+  - ou o cluster nao tem autenticacao/configuracao para pull dessas imagens
+- Confirmado com `curl -i 'https://ghcr.io/token?service=ghcr.io&scope=repository:ilki70/sdr/backend:pull'` que o GHCR exige autenticao (`401 Unauthorized`), o que justifica a rejeicao dos novos containers.
+- Diagnostico refinado:
+  - o PAT fornecido pelo usuario autentica na API GitHub, mas possui apenas escopos `repo, workflow`
+  - ao tentar ler manifests do GHCR para `ghcr.io/ilki70/sdr/{backend,frontend,whatsapp-gateway}`, a resposta foi `403 requested access to the resource is denied`
+  - foi testado cadastrar o GHCR no Portainer com esse PAT, mas o swarm continuou sem conseguir puxar as imagens
+  - o registry temporario foi removido do Portainer para nao deixar credencial sem efeito persistida no ambiente
+  - mesmo apos o repositorio `https://github.com/ilki70/sdr` ficar publico, o GHCR continuou exigindo autenticacao para os packages, indicando que a visibilidade do pacote ainda nao esta publica
+
+## Next Recommended Step
+- Antes de um novo rollout:
+  - gerar um PAT com `read:packages` para pull, ou `write:packages`/`delete:packages` se a intencao for administrar/publicar os packages
+  - ou abrir manualmente cada package do GHCR (`backend`, `frontend`, `whatsapp-gateway`) e mudar a visibilidade para `public`
+  - alternativamente, tornar os packages do GHCR publicos com uma credencial que tenha permissao de pacote
+  - so depois reaplicar a stack nova com `whatsapp-gateway` e validar QR pairing real
+
+## 2026-03-15
+- Concluido o destravamento do deploy via GHCR:
+  - os tres packages `backend`, `frontend` e `whatsapp-gateway` passaram a responder anonimamente no GHCR com manifest `200`
+  - a stack `atendente3` foi reaplicada no Portainer usando:
+    - `ghcr.io/ilki70/sdr/backend:latest`
+    - `ghcr.io/ilki70/sdr/frontend:latest`
+    - `ghcr.io/ilki70/sdr/whatsapp-gateway:latest`
+- Estado final do Swarm:
+  - `atendente3_backend` em `running` por digest `sha256:69068d2bfd63b786f456bc2e565ac0fa81df61d6804b6ef111e1967e37009d49`
+  - `atendente3_frontend` em `running` por digest `sha256:c3c9a631900eaba7048f951c8278907f81472c8056057b9f2a152cf5daf3e56f`
+  - `atendente3_whatsapp-gateway` em `running` por digest `sha256:9c2a5f6fd0ed6f17a30fe425b9ed9093bbf1248a1add2530207191e77efab41a`
+- Validacao publica:
+  - `https://pulse.orfi.com.br/` -> `200`
+  - `https://pulse.orfi.com.br/login` -> `200`
+- Observacao de validacao:
+  - `https://pulse.orfi.com.br/api/auth/providers` retornou `404` nesta build nova; como `/` e `/login` respondem com a aplicacao Next correta, isso parece ser mudanca/regressao especifica da rota de auth e precisa ser revisada separadamente
+
+## Current Status
+- A stack nova com `whatsapp-gateway` esta publicada em producao.
+- O frontend e o backend novos subiram a partir das imagens do GHCR.
+- O ponto funcional ainda nao validado em producao e o fluxo real de QR pairing/pareamento no dashboard.
+- Existe um possivel ajuste pendente na rota `/api/auth/providers`, que esta respondendo `404` nesta release.
+
+## Next Recommended Step
+- Validar no app:
+  - abrir o dashboard autenticado
+  - gerar o QR code
+  - testar pareamento real do WhatsApp
+  - checar se a auth esperada do frontend realmente mudou de contrato ou se `/api/auth/providers` regrediu e precisa de correcao

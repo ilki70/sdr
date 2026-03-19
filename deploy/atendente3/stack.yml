@@ -23,6 +23,7 @@ services:
       BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
       WHATSAPP_GATEWAY_BASE_URL: ${WHATSAPP_GATEWAY_BASE_URL:-http://whatsapp-gateway:8090}
       WHATSAPP_GATEWAY_SECRET: ${WHATSAPP_GATEWAY_SECRET:-replace-with-gateway-secret}
+      ADMIN_RESET_SECRET: ${ADMIN_RESET_SECRET:-}
     volumes:
       - atendente3_backend_data:/data
     secrets:

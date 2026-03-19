@@ -33,3 +33,19 @@ class SessionResponse(BaseModel):
     tenant_id: str
     role: str
     request_id: str
+
+
+class AdminResetUserPasswordRequest(BaseModel):
+    tenant_id: str = Field(min_length=3, max_length=120)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    full_name: str | None = Field(default=None, min_length=2, max_length=120)
+    role: str | None = Field(default=None, max_length=16)
+
+
+class AdminResetUserPasswordResponse(BaseModel):
+    tenant_id: str
+    email: EmailStr
+    user_id: str
+    role: str
+    status: str

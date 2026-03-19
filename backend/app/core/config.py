@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     seed_admin_email: str = Field(default="admin@agentevendedor.example.com", alias="SEED_ADMIN_EMAIL")
     seed_admin_password: str = Field(default="12345678", alias="SEED_ADMIN_PASSWORD")
     seed_tenant_slug: str = Field(default="tenant-lab", alias="SEED_TENANT_SLUG")
+    admin_reset_secret: str = Field(default="", alias="ADMIN_RESET_SECRET")
     qdrant_collection_name: str = Field(default="knowledge_chunks", alias="QDRANT_COLLECTION_NAME")
     celery_task_always_eager: bool = Field(default=False, alias="CELERY_TASK_ALWAYS_EAGER")
 

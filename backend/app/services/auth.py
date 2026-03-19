@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.entities import Tenant, TenantUser, User
-from app.schemas.auth import RegisterRequest
+from app.schemas.auth import AdminResetUserPasswordRequest, RegisterRequest
 from app.services.agents import ensure_default_agent_for_tenant
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
@@ -108,6 +108,70 @@ async def register_user(db: AsyncSession, payload: RegisterRequest) -> Authentic
             role=payload.role,
         )
         db.add(membership)
+
+    await db.flush()
+    await ensure_default_agent_for_tenant(db, tenant.id, user.id)
+    await db.commit()
+    return AuthenticatedUser(
+        user_id=user.id,
+        tenant_id=tenant.id,
+        role=membership.role,
+        email=user.email,
+        full_name=user.full_name,
+    )
+
+
+async def reset_user_password(
+    db: AsyncSession,
+    payload: AdminResetUserPasswordRequest,
+) -> AuthenticatedUser:
+    tenant_result = await db.execute(
+        select(Tenant).where((Tenant.id == payload.tenant_id) | (Tenant.slug == payload.tenant_id))
+    )
+    tenant = tenant_result.scalar_one_or_none()
+    if not tenant:
+        tenant = Tenant(
+            id=str(uuid4()),
+            name=f"Tenant {payload.tenant_id}",
+            slug=payload.tenant_id.lower().replace(" ", "-"),
+            status="active",
+        )
+        db.add(tenant)
+        await db.flush()
+
+    user_result = await db.execute(select(User).where(User.email == payload.email))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        user = User(
+            id=str(uuid4()),
+            email=payload.email,
+            password_hash=hash_password(payload.password),
+            full_name=payload.full_name or payload.email.split("@", 1)[0],
+            is_active=True,
+        )
+        db.add(user)
+        await db.flush()
+    else:
+        user.password_hash = hash_password(payload.password)
+        user.is_active = True
+        if payload.full_name:
+            user.full_name = payload.full_name
+
+    link_result = await db.execute(
+        select(TenantUser).where(TenantUser.user_id == user.id, TenantUser.tenant_id == tenant.id)
+    )
+    membership = link_result.scalar_one_or_none()
+    if not membership:
+        membership = TenantUser(
+            id=str(uuid4()),
+            tenant_id=tenant.id,
+            user_id=user.id,
+            role=payload.role or "operator",
+        )
+        db.add(membership)
+    else:
+        if payload.role:
+            membership.role = payload.role
 
     await db.flush()
     await ensure_default_agent_for_tenant(db, tenant.id, user.id)
