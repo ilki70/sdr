@@ -8,13 +8,14 @@ export async function fetchJson<T>(input: string, init?: RequestInit): Promise<T
     cache: "no-store",
   });
 
+  const text = await response.text();
+
   if (!response.ok) {
     let message = `Falha na requisicao: ${response.status}`;
     try {
-      const payload = (await response.json()) as { detail?: string; message?: string };
-      message = payload.detail || payload.message || message;
+      const payload = text ? (JSON.parse(text) as { detail?: string; message?: string }) : null;
+      message = payload?.detail || payload?.message || message;
     } catch {
-      const text = await response.text();
       if (text) {
         message = text;
       }
@@ -22,5 +23,5 @@ export async function fetchJson<T>(input: string, init?: RequestInit): Promise<T
     throw new Error(message);
   }
 
-  return (await response.json()) as T;
+  return (text ? JSON.parse(text) : null) as T;
 }

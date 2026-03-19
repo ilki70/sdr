@@ -8,14 +8,27 @@
 - O hub de `consorcios` agora encaminha para essas telas dedicadas, enquanto o `playbook` publica a configuracao do agente e o `knowledge` concentra RAG, ingestao de fontes e laboratorio.
 - Adicionada a rota `inbox` para acompanhamento de conversas com filtros, detalhe do atendimento e foco em handoff humano.
 - Criado um novo manifesto de deploy em `deploy/sdr`, com nomes de router/servico em `sdr` e volumes preservados dos dados da stack antiga `atendente3`.
+- A stack `deploy/sdr/stack.yml` foi ajustada com `version: "3.9"` e o README passou a explicitar o uso do Portainer Web Editor para edição direta do YAML.
+- A tentativa de autenticar no Portainer com a credencial recebida nesta sessao nao passou: a API respondeu `403` inclusive em `api/auth` e `api/status`, entao o bloqueio da atualizacao da stack continua sendo acesso administrativo ao painel.
 - Validacao local executada com sucesso:
   - `python3 -m py_compile` nos arquivos backend alterados
   - `npm run typecheck` no frontend
   - `npm run build` no frontend
+- A stack `sdr` foi finalmente atualizada no Portainer via API autenticada com `portainer_api_key` e CSRF, trocando os servicos para os tags SHA do commit `87bc7e52619df39f8b0887e9461273483df89208`.
+- Smoke publico final ok em:
+  - `/consorcios`
+  - `/consorcios/playbook`
+  - `/consorcios/knowledge`
+  - `/consorcios/inbox`
+  - `/health`
+- Verificacao geral posterior no endereco publico mostrou alinhamento visual e de navegacao com o produto atual, mas com falhas de runtime em auth:
+  - `/api/auth/session` -> `500`
+  - `/api/auth/login` com payload valido -> `500`
+  - `/api/auth/register` com payload valido -> `500`
+  - `/api/auth/providers` -> `404` (esperado, nao ha contrato NextAuth/providers nessa base)
 - Proximo passo:
-  - versionar e publicar a mudanca
-  - atualizar o Portainer para a stack `sdr`
-  - remover a dependencia operacional do nome antigo `atendente3`
+  - manter o fluxo de edicao direta do YAML no Portainer para ajustes rápidos
+  - quando houver novo build, voltar a alinhar a stack com os tags de imagem desejados
 
 ## 2026-03-10
 - Clonado o repositorio `sdr` em `/home/ilki/sdr`.

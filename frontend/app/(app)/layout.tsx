@@ -3,16 +3,16 @@ import { BRAND_NAME } from "@/lib/brand";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/agents", label: "Agents" },
   { href: "/consorcios", label: "Consorcios" },
-  { href: "/clients", label: "Clients" },
+  { href: "/personas", label: "Personas" },
+  { href: "/agents", label: "Agents" },
   { href: "/products", label: "Products" },
   { href: "/knowledge", label: "Knowledge" },
-  { href: "/personas", label: "Personas" },
   { href: "/integrations", label: "Integrations" },
+  { href: "/agent-lab", label: "Agent Lab" },
   { href: "/conversations", label: "Conversations" },
   { href: "/quality", label: "Quality" },
-  { href: "/agent-lab", label: "Agent Lab" },
+  { href: "/clients", label: "Clients" },
   { href: "/commissions", label: "Commissions" },
 ];
 

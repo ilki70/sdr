@@ -16,6 +16,7 @@ Plataforma interna de operacao comercial com agentes de IA, backend FastAPI, fro
 - Reposicionar o produto para uso interno da equipe em consorcios/Turn2C.
 - Preservar o contexto multi-tenant entre frontend, backend e banco.
 - Evoluir o frontend para configurar comportamento do agente, ingerir conhecimento, acompanhar atendimentos em tempo real e separar o `consorcios studio` em subareas explicitas.
+- Manter a stack `sdr` em formato autossuficiente para edicao direta no Portainer Web Editor, preservando os volumes antigos e o fluxo de deploy versionado.
 - Manter o bootstrap local funcional enquanto a nova linha de produto evolui.
 
 ## Key References

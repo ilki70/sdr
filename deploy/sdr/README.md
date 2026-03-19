@@ -2,6 +2,12 @@
 
 Esta pasta versiona a stack `sdr` que substitui a antiga `atendente3` no Docker Swarm/Portainer.
 
+## Operacao no Portainer
+
+- A stack foi mantida em um unico `stack.yml` autossuficiente para colar/editar direto no Portainer Web Editor.
+- Depois de abrir a stack `sdr` no Portainer, a operacao esperada e editar o YAML ali mesmo e reaplicar o deploy.
+- O comando `docker stack deploy -c deploy/sdr/stack.yml sdr` continua valido fora do Portainer para ambientes locais.
+
 ## O que foi alinhado
 
 - Servicos atuais: `postgres`, `backend`, `frontend`, `db-admin` e `whatsapp-gateway`
