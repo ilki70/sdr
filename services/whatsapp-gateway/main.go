@@ -126,10 +126,14 @@ func NewManager(dataDir string, gatewaySecret string) (*Manager, error) {
 	}
 
 	ctx := context.Background()
+	sessionDBPath := filepath.ToSlash(filepath.Join(dataDir, "session.db"))
 	container, err := sqlstore.New(
 		ctx,
 		"sqlite",
-		fmt.Sprintf("file:%s?_pragma=foreign_keys(1)", filepath.ToSlash(filepath.Join(dataDir, "session.db"))),
+		fmt.Sprintf(
+			"file:%s?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)",
+			sessionDBPath,
+		),
 		waLog.Stdout("DB", "INFO", true),
 	)
 	if err != nil {
@@ -251,6 +255,11 @@ func (m *Manager) handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	if m.snapshotConfig().CallbackURL == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "gateway is not configured"})
+		return
+	}
+	status := m.snapshotStatus()
+	if m.client.IsConnected() || status.Connected || status.SessionStatus == "connecting" || status.SessionStatus == "pairing" {
+		writeJSON(w, http.StatusOK, status)
 		return
 	}
 

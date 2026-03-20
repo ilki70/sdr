@@ -1,6 +1,31 @@
 # Worklog
 
 ## 2026-03-20
+- Diagnostiquei uma falha de resposta no WhatsApp em producao:
+  - o backend nao estava recebendo nenhum `POST /api/v1/whatsapp/inbound`
+  - os logs do `whatsapp-gateway` mostravam falha de descriptografia/sincronizacao da sessao com `database is locked (SQLITE_BUSY)` logo apos autenticar
+  - o mesmo periodo mostrou tentativas repetidas de `POST /api/v1/whatsapp/session/connect`, com a primeira em `200` e as seguintes em `500`
+- Correcao local preparada no gateway:
+  - a abertura do `session.db` agora habilita `journal_mode(WAL)`, `synchronous(NORMAL)` e `busy_timeout(5000)` alem de `foreign_keys(1)`
+  - `handleConnect` passou a retornar o estado atual sem reiniciar a conexao quando a sessao ja esta `connecting`, `pairing` ou conectada
+- Validacao executada:
+  - `go test ./...` em `services/whatsapp-gateway` -> ok
+- Status atual:
+  - correcao pronta localmente para publicacao e redeploy
+- Proximo passo recomendado:
+  - publicar um patch release do gateway e reaplicar a stack `sdr`, depois validar um inbound real de WhatsApp
+
+## 2026-03-20
+- Migração concluída do clone problemático do `sdr` para um clone limpo no caminho padrão:
+  - o clone limpo sincronizado foi promovido de `/home/ilki/tmp/sdr-sync-20260320` para `/home/ilki/sdr`
+  - o clone antigo com `.git` quebrado foi preservado em `/home/ilki/sdr-broken-20260320`
+  - o `origin` do clone novo foi sanitizado para `https://github.com/ilki70/sdr.git`, sem token gravado no config local
+- Status atual:
+  - `/home/ilki/sdr` esta limpo em `main`, alinhado a `origin/main`
+- Proximo passo recomendado:
+  - trabalhar somente no clone novo e descartar o backup antigo quando nao houver mais necessidade de consulta
+
+## 2026-03-20
 - Publicada a branch de sincronizacao `chore/resume-local-2026-03-20` no GitHub a partir do clone limpo em `/home/ilki/tmp/sdr-sync-20260320`.
 - Delta publicado:
   - correção do `whatsapp_gateway` para persistir `payload.message_id` em `external_message_id`
