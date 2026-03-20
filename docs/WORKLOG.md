@@ -10,10 +10,33 @@
   - `handleConnect` passou a retornar o estado atual sem reiniciar a conexao quando a sessao ja esta `connecting`, `pairing` ou conectada
 - Validacao executada:
   - `go test ./...` em `services/whatsapp-gateway` -> ok
+- Publicacao e deploy:
+  - commit `63947b0 fix: harden whatsapp gateway session store` publicado em `main`
+  - release `v0.2.5` criada no GitHub
+  - workflow `Build atendente3 images` concluiu com `success`
+  - a stack `sdr` foi reaplicada no Portainer pelo editor da stack com confirmacao `Re-pull image and redeploy`
+  - o servico `sdr_whatsapp-gateway` convergiu para `ghcr.io/ilki70/sdr/whatsapp-gateway:latest@sha256:6b935afb08e71692a9360adc4d19615d2e85240125adf3531225135e5bdb01da`
 - Status atual:
-  - correcao pronta localmente para publicacao e redeploy
+  - frontend e health publico responderam `200` apos o rollout
+  - o gateway novo subiu limpo; ainda falta validar um inbound real de WhatsApp depois da troca
 - Proximo passo recomendado:
-  - publicar um patch release do gateway e reaplicar a stack `sdr`, depois validar um inbound real de WhatsApp
+  - enviar uma mensagem real para a conta conectada e confirmar que o backend volta a registrar `/api/v1/whatsapp/inbound` e que o agente responde
+
+## 2026-03-20
+- Segunda passada no fluxo do WhatsApp apos o patch de SQLite:
+  - o gateway voltou a autenticar sem `SQLITE_BUSY`, mas mensagens reais ainda nao chegavam ao backend
+  - os logs mostraram `Successfully authenticated`, porem nenhum `/api/v1/whatsapp/inbound`
+  - o backend ainda recebia `POST /api/v1/whatsapp/session/connect` repetido mesmo com a sessao ativa
+- Correcao local preparada:
+  - o `whatsapp-gateway` agora aceita chats `@lid` como inbound valido e tenta normalizar `lid -> numero` antes de encaminhar ao backend
+  - `connect_whatsapp_gateway()` no backend passou a ser idempotente quando o status atual ja esta em `connected`, `connecting` ou `pairing`
+- Validacao executada:
+  - `go test ./...` em `services/whatsapp-gateway` -> ok
+  - `python3.11 -m py_compile backend/app/services/whatsapp_gateway.py` -> ok
+- Status atual:
+  - correcao pronta localmente para publicacao e novo redeploy
+- Proximo passo recomendado:
+  - publicar esse patch e repetir o teste real com uma mensagem de WhatsApp
 
 ## 2026-03-20
 - Migração concluída do clone problemático do `sdr` para um clone limpo no caminho padrão:

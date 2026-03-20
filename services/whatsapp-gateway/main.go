@@ -372,7 +372,7 @@ func (m *Manager) handleEvent(raw interface{}) {
 		if evt.Info.IsFromMe {
 			return
 		}
-		if evt.Info.Chat.Server != types.DefaultUserServer {
+		if !isSupportedInboundChat(evt.Info.Chat) {
 			return
 		}
 		messageText := extractText(evt.Message)
@@ -384,6 +384,27 @@ func (m *Manager) handleEvent(raw interface{}) {
 	}
 }
 
+func isSupportedInboundChat(chat types.JID) bool {
+	switch chat.Server {
+	case types.DefaultUserServer, types.HiddenUserServer:
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeUserJID(ctx context.Context, client *whatsmeow.Client, jid types.JID) types.JID {
+	if client == nil || jid.Server != types.HiddenUserServer {
+		return jid
+	}
+	pn, err := client.Store.LIDs.GetPNForLID(ctx, jid.ToNonAD())
+	if err != nil || pn.IsEmpty() {
+		return jid
+	}
+	pn.Device = jid.Device
+	return pn
+}
+
 func (m *Manager) forwardInbound(evt *events.Message, messageText string, attachments []MediaAttachment) {
 	cfg := m.snapshotConfig()
 	if cfg.CallbackURL == "" {
@@ -393,14 +414,17 @@ func (m *Manager) forwardInbound(evt *events.Message, messageText string, attach
 		return
 	}
 
-	sender := evt.Info.Sender.String()
+	ctx := context.Background()
+	chatJID := normalizeUserJID(ctx, m.client, evt.Info.Chat)
+	senderJID := normalizeUserJID(ctx, m.client, evt.Info.Sender)
+	sender := senderJID.String()
 	if sender == "" {
-		sender = evt.Info.Chat.String()
+		sender = chatJID.String()
 	}
 	payload := InboundPayload{
 		TenantID:      cfg.TenantID,
 		IntegrationID: cfg.IntegrationID,
-		ChatID:        evt.Info.Chat.String(),
+		ChatID:        chatJID.String(),
 		SenderID:      sender,
 		SenderName:    evt.Info.PushName,
 		MessageID:     evt.Info.ID,

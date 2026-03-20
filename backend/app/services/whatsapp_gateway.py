@@ -162,6 +162,12 @@ async def bootstrap_whatsapp_gateway(db: AsyncSession, tenant_id: str) -> WhatsA
 async def connect_whatsapp_gateway(db: AsyncSession, tenant_id: str) -> WhatsAppSessionStatusResponse:
     integration = await ensure_whatsapp_integration(db, tenant_id)
     await _configure_gateway(tenant_id, integration)
+    current_status = await build_whatsapp_session_status(db, tenant_id)
+    if current_status.gateway.session_status in {"connected", "connecting", "pairing"}:
+        if integration.status != "active":
+            integration.status = "active"
+            await db.commit()
+        return current_status
     await _call_gateway("POST", "/api/v1/session/connect")
     integration.status = "active"
     await db.commit()
