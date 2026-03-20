@@ -465,19 +465,37 @@ func (m *Manager) forwardInbound(evt *events.Message, messageText string, attach
 		m.updateStatus(func(status *SessionStatus) { status.LastError = err.Error() })
 		return
 	}
+	log.Printf(
+		"whatsapp inbound callback ok duplicate=%t reply_fragments=%d reply_text_len=%d normalized_chat=%s raw_chat=%s",
+		inboundResponse.Duplicate,
+		len(inboundResponse.ReplyFragments),
+		len(strings.TrimSpace(inboundResponse.ReplyText)),
+		payload.ChatID,
+		evt.Info.Chat.String(),
+	)
 	if inboundResponse.Duplicate || (strings.TrimSpace(inboundResponse.ReplyText) == "" && len(inboundResponse.ReplyFragments) == 0) {
 		return
 	}
 
-	jid, err := types.ParseJID(payload.ChatID)
-	if err != nil {
+	replyJID := evt.Info.Chat
+	if replyJID.IsEmpty() {
+		var err error
+		replyJID, err = types.ParseJID(payload.ChatID)
+		if err != nil {
+			m.updateStatus(func(status *SessionStatus) { status.LastError = err.Error() })
+			return
+		}
+	}
+	if err = sendFragmentedReply(context.Background(), m.client, replyJID, inboundResponse.ReplyFragments, inboundResponse.ReplyText); err != nil {
 		m.updateStatus(func(status *SessionStatus) { status.LastError = err.Error() })
+		log.Printf("whatsapp reply send failed chat=%s err=%v", replyJID.String(), err)
 		return
 	}
-	if err = sendFragmentedReply(context.Background(), m.client, jid, inboundResponse.ReplyFragments, inboundResponse.ReplyText); err != nil {
-		m.updateStatus(func(status *SessionStatus) { status.LastError = err.Error() })
-		return
-	}
+	m.updateStatus(func(status *SessionStatus) {
+		status.LastEvent = "message_replied"
+		status.LastError = ""
+	})
+	log.Printf("whatsapp reply sent chat=%s reply_fragments=%d", replyJID.String(), len(inboundResponse.ReplyFragments))
 }
 
 func extractText(message *waProto.Message) string {
