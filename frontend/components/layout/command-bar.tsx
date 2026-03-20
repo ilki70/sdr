@@ -13,7 +13,7 @@ export function CommandBar() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] uppercase tracking-[0.24em] text-white/40">Atalhos</p>
-          <p className="mt-1 text-sm text-white/70">Acessos rapidos para operar o studio sem ficar pulando menus.</p>
+          <p className="mt-1 text-sm text-white/70">Acessos rápidos para operar o studio sem ficar pulando menus.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {shortcuts.map((shortcut) => (

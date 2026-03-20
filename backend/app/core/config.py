@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     mysql_url: str = Field(default="", alias="MYSQL_URL")
     redis_url: str = Field(default="", alias="REDIS_URL")
     qdrant_url: str = Field(default="", alias="QDRANT_URL")
+    conversation_context_ttl_seconds: int = Field(default=86400, alias="CONVERSATION_CONTEXT_TTL_SECONDS")
 
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     openai_api_key_file: str = Field(default="", alias="OPENAI_API_KEY_FILE")

@@ -20,6 +20,13 @@ from app.schemas.whatsapp import (
     WhatsAppInboundResponse,
     WhatsAppSessionStatusResponse,
 )
+from app.services.conversation_context import (
+    load_cached_conversation_context,
+    refresh_conversation_context_from_db,
+    resolve_fragmented_inbound_text,
+    store_cached_conversation_context,
+)
+from app.services.conversation_media import summarize_media_attachments
 from app.services.messages import list_recent_conversation_messages, save_message
 
 settings = get_settings()
@@ -295,11 +302,46 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
             reply_text="",
             reply_fragments=[],
             follow_up_suggestion=None,
+            deferred=False,
         )
 
     phone = _clean_phone(payload.sender_id)
     lead = await _ensure_whatsapp_lead(db, payload, phone)
     conversation = await _ensure_whatsapp_conversation(db, payload, lead, integration)
+
+    media_notes = await summarize_media_attachments([attachment.model_dump() for attachment in payload.attachments])
+    incoming_text = payload.message_text.strip()
+    if not incoming_text and not media_notes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty inbound message")
+
+    conversation_context = await load_cached_conversation_context(payload.tenant_id, conversation.id)
+    if conversation_context is None:
+        conversation_context = await refresh_conversation_context_from_db(
+            db,
+            tenant_id=payload.tenant_id,
+            conversation_id=conversation.id,
+        )
+
+    if not media_notes:
+        conversation_context, effective_message_text, deferred = resolve_fragmented_inbound_text(
+            conversation_context,
+            incoming_text,
+        )
+        await store_cached_conversation_context(conversation_context)
+        if deferred:
+            await db.commit()
+            return WhatsAppInboundResponse(
+                duplicate=False,
+                deferred=True,
+                lead_id=lead.id,
+                conversation_id=conversation.id,
+                reply_text="",
+                reply_fragments=[],
+                follow_up_suggestion=None,
+            )
+    else:
+        effective_message_text = incoming_text
+        effective_message_text = f"{effective_message_text}\n{' | '.join(media_notes)}".strip()
 
     await save_message(
         db=db,
@@ -307,15 +349,23 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
         conversation_id=conversation.id,
         sender_type="lead",
         direction="inbound",
-        content=payload.message_text,
-        external_message_id=payload.message_id,
+        content=effective_message_text,
+        external_message_id=payload.external_message_id,
         metadata_json={
             "source": "whatsapp_gateway",
             "chat_id": payload.chat_id,
             "sender_id": payload.sender_id,
+            "attachments": [attachment.model_dump() for attachment in payload.attachments],
+            "media_notes": media_notes,
         },
     )
 
+    conversation_context = await refresh_conversation_context_from_db(
+        db,
+        tenant_id=payload.tenant_id,
+        conversation_id=conversation.id,
+        media_notes=media_notes,
+    )
     history = await _load_history_for_agent(db, payload.tenant_id, conversation.id)
     state = AgentState(
         tenant_id=payload.tenant_id,
@@ -323,8 +373,10 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
         lead_id=lead.id,
         conversation_id=conversation.id,
         channel="whatsapp",
-        message_text=payload.message_text,
+        message_text=effective_message_text,
         conversation_history=history,
+        conversation_context=conversation_context.model_dump(),
+        media_context=media_notes,
     )
     state = await run_sales_agent(state)
 
@@ -353,6 +405,12 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
         .where(Lead.id == lead.id)
         .values(last_seen_at=utcnow_naive(), lifecycle_status="engaged", updated_at=utcnow_naive())
     )
+    await refresh_conversation_context_from_db(
+        db,
+        tenant_id=payload.tenant_id,
+        conversation_id=conversation.id,
+        last_intent=state.intent,
+    )
     await db.commit()
 
     return WhatsAppInboundResponse(
@@ -362,4 +420,5 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
         reply_text=state.draft_reply,
         reply_fragments=state.reply_fragments,
         follow_up_suggestion=state.follow_up_suggestion,
+        deferred=False,
     )

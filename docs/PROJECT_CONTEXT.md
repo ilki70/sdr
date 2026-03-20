@@ -11,6 +11,7 @@ Plataforma interna de operacao comercial com agentes de IA, backend FastAPI, fro
 - Frontend: Next.js com iron-session, landing, login e modulos operacionais do MVP.
 - Infra local: Docker Compose com MySQL, Redis, Qdrant e Adminer.
 - Produção Swarm: stack `sdr` com `redis`, `postgres`, `backend`, `worker`, `frontend`, `db-admin` e `whatsapp-gateway`.
+- URL interna do backend no stack: usar `http://sdr_backend:8000` para evitar colisao com alias genérico `backend`.
 - Fluxo principal: login por tenant, proxy autenticado frontend -> backend, laboratorio de agente para simulacao de conversas e central operacional interna.
 
 ## Current Priorities
@@ -35,3 +36,6 @@ Plataforma interna de operacao comercial com agentes de IA, backend FastAPI, fro
 - O foco atual e a adaptacao do `sdr` para um sistema interno de SDR/closer assistido para consorcios, com RAG de documentos e videos YouTube, monitoria de conversas e handoff humano quando necessario.
 - A stack de producao deve ser tratada como `sdr`; `atendente3` continua apenas como nome historico em alguns caminhos, variaveis e recursos legados.
 - A base de conhecimento ja aceita videos YouTube como fonte e tenta extrair transcript completo quando a legenda estiver disponivel, usando o oEmbed como fallback.
+- O contexto curto de conversa agora e cacheado em Redis por `conversation_id` para evitar repeticao de perguntas e preservar `imovel`, `valor`, `prazo` e `lance` entre turnos.
+- O fluxo de WhatsApp agora tambem leva `audio` e `image` para o backend via anexos, com transcricao/analisador multimodal quando houver arquivo disponivel.
+- O agente pode responder em fragmentos curtos para simular conversa mais humana no canal.

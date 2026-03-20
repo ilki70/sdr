@@ -129,7 +129,7 @@ async def list_recent_conversation_messages(
     db: AsyncSession,
     tenant_id: str,
     conversation_id: str,
-    limit: int = 10,
+    limit: int = 20,
 ) -> list[Message]:
     direction_order = case((Message.direction == "outbound", 0), else_=1)
     result = await db.execute(

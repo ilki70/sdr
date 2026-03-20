@@ -17,6 +17,8 @@ from app.schemas.messages import (
     MessageSimulateRequest,
     MessageSimulateResponse,
 )
+from app.services.conversation_context import refresh_conversation_context_from_db
+from app.services.conversation_media import summarize_media_attachments
 from app.services.messages import (
     create_lab_conversation,
     ensure_lab_conversation,
@@ -43,13 +45,17 @@ async def _prepare_state(
         channel=payload.channel,
     )
     history = await list_recent_conversation_messages(db, context.tenant_id, conversation.id)
+    media_notes = await summarize_media_attachments([attachment.model_dump() for attachment in payload.attachments])
+    effective_message_text = payload.message_text.strip()
+    if media_notes:
+        effective_message_text = f"{effective_message_text}\n{' | '.join(media_notes)}".strip()
     state = AgentState(
         tenant_id=context.tenant_id,
         agent_id=conversation.agent_id,
         lead_id=conversation.lead_id,
         conversation_id=conversation.id,
         channel=payload.channel,
-        message_text=payload.message_text,
+        message_text=effective_message_text,
         conversation_history=[
             {
                 "role": "assistant" if message.sender_type == "assistant" else "user",
@@ -57,6 +63,7 @@ async def _prepare_state(
             }
             for message in history
         ],
+        media_context=media_notes,
     )
     return state, conversation.id
 
@@ -118,13 +125,20 @@ async def simulate_message(
     await persist_conversation_exchange(
         db=db,
         conversation=conversation,
-        user_text=payload.message_text,
+        user_text=state.message_text,
         assistant_text=state.draft_reply,
         intent=state.intent,
         confidence_score=state.confidence_score,
         model_name=settings.openai_model if settings.resolved_openai_api_key else "mock-llm",
         reply_fragments=state.reply_fragments,
         follow_up_suggestion=state.follow_up_suggestion,
+    )
+    await refresh_conversation_context_from_db(
+        db,
+        tenant_id=context.tenant_id,
+        conversation_id=conversation.id,
+        last_intent=state.intent,
+        media_notes=state.media_context,
     )
     return MessageSimulateResponse(
         conversation_id=conversation_id,
@@ -154,13 +168,20 @@ async def stream_message(
     await persist_conversation_exchange(
         db=db,
         conversation=conversation,
-        user_text=payload.message_text,
+        user_text=state.message_text,
         assistant_text=state.draft_reply,
         intent=state.intent,
         confidence_score=state.confidence_score,
         model_name=settings.openai_model if settings.resolved_openai_api_key else "mock-llm",
         reply_fragments=state.reply_fragments,
         follow_up_suggestion=state.follow_up_suggestion,
+    )
+    await refresh_conversation_context_from_db(
+        db,
+        tenant_id=context.tenant_id,
+        conversation_id=conversation.id,
+        last_intent=state.intent,
+        media_notes=state.media_context,
     )
 
     async def event_generator():

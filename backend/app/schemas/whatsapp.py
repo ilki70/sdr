@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Any
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -33,13 +34,15 @@ class WhatsAppInboundRequest(BaseModel):
     sender_id: str = Field(min_length=1, max_length=80)
     sender_name: str | None = Field(default=None, max_length=140)
     message_id: str = Field(min_length=1, max_length=128)
-    message_text: str = Field(min_length=1, max_length=4000)
+    message_text: str = Field(default="", max_length=4000)
     push_name: str | None = Field(default=None, max_length=140)
     sent_at: datetime | None = None
+    attachments: list["WhatsAppInboundAttachment"] = Field(default_factory=list)
 
 
 class WhatsAppInboundResponse(BaseModel):
     duplicate: bool = False
+    deferred: bool = False
     lead_id: str
     conversation_id: str
     reply_text: str
@@ -47,16 +50,25 @@ class WhatsAppInboundResponse(BaseModel):
     follow_up_suggestion: str | None = None
 
 
+class WhatsAppInboundAttachment(BaseModel):
+    kind: Literal["audio", "image", "document", "video", "file"] = "file"
+    file_ref: str = Field(min_length=1, max_length=500)
+    mime_type: str | None = Field(default=None, max_length=80)
+    caption: str | None = Field(default=None, max_length=500)
+    filename: str | None = Field(default=None, max_length=255)
+
+
 class WhatsAppInboundWebhookRequest(BaseModel):
     inbox_ref: str = Field(min_length=2, max_length=128)
     webhook_secret: str = Field(min_length=4, max_length=255)
-    message_text: str = Field(min_length=1, max_length=4000)
+    message_text: str = Field(default="", max_length=4000)
     contact_id: str = Field(min_length=1, max_length=128)
     contact_name: str | None = Field(default=None, max_length=140)
     contact_phone: str | None = Field(default=None, max_length=40)
     external_message_id: str | None = Field(default=None, max_length=128)
     external_conversation_id: str | None = Field(default=None, max_length=128)
     metadata_json: dict[str, Any] | None = None
+    attachments: list[WhatsAppInboundAttachment] = Field(default_factory=list)
 
 
 class WhatsAppInboundWebhookResponse(BaseModel):
@@ -70,3 +82,4 @@ class WhatsAppInboundWebhookResponse(BaseModel):
     follow_up_suggestion: str | None = None
     reply_fragments: list[str] = Field(default_factory=list)
     duplicate_message: bool = False
+    deferred: bool = False

@@ -1,6 +1,7 @@
 import secrets
 from uuid import uuid4
 
+from fastapi import HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +10,13 @@ from app.agents.state import AgentState
 from app.core.time import utcnow_naive
 from app.models.entities import ChannelIntegration, Conversation, Lead, Message
 from app.schemas.whatsapp import WhatsAppInboundWebhookRequest, WhatsAppInboundWebhookResponse
+from app.services.conversation_media import summarize_media_attachments
+from app.services.conversation_context import (
+    load_cached_conversation_context,
+    refresh_conversation_context_from_db,
+    resolve_fragmented_inbound_text,
+    store_cached_conversation_context,
+)
 from app.services.messages import list_recent_conversation_messages, save_message
 
 
@@ -176,8 +184,47 @@ async def handle_inbound_whatsapp_message(
             duplicate_message=True,
         )
 
+    media_notes = await summarize_media_attachments([attachment.model_dump() for attachment in payload.attachments])
+    incoming_text = payload.message_text.strip()
+    if not incoming_text and not media_notes:
+        raise HTTPException(status_code=400, detail="Empty inbound message")
+
     lead = await _get_or_create_lead(db, integration, payload)
     conversation = await _get_or_create_conversation(db, integration, lead, payload)
+
+    conversation_context = await load_cached_conversation_context(integration.tenant_id, conversation.id)
+    if conversation_context is None:
+        conversation_context = await refresh_conversation_context_from_db(
+            db,
+            tenant_id=integration.tenant_id,
+            conversation_id=conversation.id,
+        )
+
+    deferred = False
+    if not media_notes:
+        conversation_context, effective_message_text, deferred = resolve_fragmented_inbound_text(
+            conversation_context,
+            incoming_text,
+        )
+        await store_cached_conversation_context(conversation_context)
+        if deferred:
+            await db.commit()
+            return WhatsAppInboundWebhookResponse(
+                tenant_id=integration.tenant_id,
+                integration_id=integration.id,
+                lead_id=lead.id,
+                conversation_id=conversation.id,
+                reply_text="",
+                intent="fragment_buffered",
+                confidence_score=0.0,
+                follow_up_suggestion=None,
+                reply_fragments=[],
+                deferred=True,
+            )
+    else:
+        effective_message_text = incoming_text
+        media_note_text = " | ".join(media_notes)
+        effective_message_text = f"{effective_message_text}\n{media_note_text}".strip()
 
     await save_message(
         db=db,
@@ -185,16 +232,24 @@ async def handle_inbound_whatsapp_message(
         conversation_id=conversation.id,
         sender_type="lead",
         direction="inbound",
-        content=payload.message_text,
+        content=effective_message_text,
         external_message_id=payload.external_message_id,
         metadata_json={
             "source": "whatsapp-service",
             "contact_id": payload.contact_id,
             "contact_phone": payload.contact_phone,
+            "attachments": [attachment.model_dump() for attachment in payload.attachments],
+            "media_notes": media_notes,
             **(payload.metadata_json or {}),
         },
     )
 
+    conversation_context = await refresh_conversation_context_from_db(
+        db,
+        tenant_id=integration.tenant_id,
+        conversation_id=conversation.id,
+        media_notes=media_notes,
+    )
     history = await list_recent_conversation_messages(db, integration.tenant_id, conversation.id)
     state = AgentState(
         tenant_id=integration.tenant_id,
@@ -202,7 +257,9 @@ async def handle_inbound_whatsapp_message(
         lead_id=lead.id,
         conversation_id=conversation.id,
         channel="whatsapp",
-        message_text=payload.message_text,
+        message_text=effective_message_text,
+        conversation_context=conversation_context.model_dump(),
+        media_context=media_notes,
         conversation_history=[
             {
                 "role": "assistant" if message.sender_type == "assistant" else "user",
@@ -237,6 +294,12 @@ async def handle_inbound_whatsapp_message(
         update(Lead)
         .where(Lead.id == lead.id)
         .values(last_seen_at=utcnow_naive(), lifecycle_status="engaged", updated_at=utcnow_naive())
+    )
+    await refresh_conversation_context_from_db(
+        db,
+        tenant_id=integration.tenant_id,
+        conversation_id=conversation.id,
+        last_intent=state.intent,
     )
     await db.commit()
 

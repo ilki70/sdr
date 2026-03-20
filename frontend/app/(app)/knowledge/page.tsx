@@ -100,7 +100,7 @@ function formatSourceType(sourceType: string): string {
     text: "Texto",
     pending_upload: "Upload pendente",
     playbook_note: "Nota interna",
-    vinac_playbook: "Playbook VINAC",
+    vinac_playbook: "Playbook",
   };
   return labels[sourceType] || sourceType;
 }
@@ -321,9 +321,9 @@ export default function KnowledgePage() {
         body: JSON.stringify({ product_id: selectedProductId }),
       });
       await refreshKnowledgeState(selectedProductId);
-      setNotice("Base oficial da VINAC enviada para ingestao.");
+      setNotice("Base oficial enviada para ingestão.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Falha ao enfileirar base VINAC.");
+      setError(cause instanceof Error ? cause.message : "Falha ao enfileirar base oficial.");
     } finally {
       setIsSeedingVinac(false);
     }
@@ -399,9 +399,9 @@ export default function KnowledgePage() {
         body: JSON.stringify({ product_id: selectedProductId }),
       });
       await refreshKnowledgeState(selectedProductId);
-      setNotice("Laboratorio VINAC enfileirado.");
+      setNotice("Laboratório do produto enfileirado.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Falha ao iniciar laboratorio VINAC.");
+      setError(cause instanceof Error ? cause.message : "Falha ao iniciar laboratório do produto.");
     } finally {
       setIsRunningEvaluation(false);
     }
@@ -435,10 +435,10 @@ export default function KnowledgePage() {
           <div className="space-y-4">
             <p className="text-[11px] uppercase tracking-[0.26em] text-[var(--accent)]">Knowledge Ops</p>
             <div>
-              <h1 className="text-3xl font-semibold">RAG operacional e laboratório VINAC</h1>
+              <h1 className="text-3xl font-semibold">RAG operacional e laboratório do produto</h1>
               <p className="mt-2 max-w-2xl text-sm text-white/70">
-                Ingestao assíncrona, versionamento de fontes, diff entre versões e avaliação automatizada do agente com
-                cenários de venda da VINAC.
+                Ingestão assíncrona, versionamento de fontes, diff entre versões e avaliação automatizada do agente
+                com cenários de venda do produto ativo.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -448,7 +448,7 @@ export default function KnowledgePage() {
                 disabled={!selectedProductId || isSeedingVinac}
                 className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-black disabled:opacity-60"
               >
-                {isSeedingVinac ? "Enfileirando..." : "Ingerir base oficial VINAC"}
+                {isSeedingVinac ? "Enfileirando..." : "Ingerir base oficial"}
               </button>
               <button
                 type="button"
@@ -456,7 +456,7 @@ export default function KnowledgePage() {
                 disabled={!selectedProductId || isRunningEvaluation}
                 className="rounded-full border border-[var(--accent)]/40 px-4 py-2 text-sm text-[var(--accent)] disabled:opacity-60"
               >
-                {isRunningEvaluation ? "Enfileirando lab..." : "Executar laboratório VINAC"}
+                {isRunningEvaluation ? "Enfileirando lab..." : "Executar laboratório"}
               </button>
               <button
                 type="button"
@@ -468,7 +468,7 @@ export default function KnowledgePage() {
               </button>
             </div>
             <div className="inline-flex rounded-full border border-white/10 bg-black/20 px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/60">
-              YouTube com transcript quando houver legenda publica
+              YouTube com transcript quando houver legenda pública
             </div>
           </div>
 
@@ -489,6 +489,12 @@ export default function KnowledgePage() {
                 </option>
               ))}
             </select>
+            <div className="mt-4 rounded-[22px] border border-white/10 bg-white/5 px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Produto ativo</p>
+              <p className="mt-1 text-sm font-semibold text-white/88">
+                {selectedProduct?.name || "Nenhum produto selecionado"}
+              </p>
+            </div>
             {!isBooting && products.length === 0 ? (
               <p className="mt-3 text-sm text-white/65">
                 Nenhum produto encontrado. Cadastre um produto em{" "}
@@ -499,7 +505,7 @@ export default function KnowledgePage() {
               </p>
             ) : null}
             <p className="mt-4 text-sm text-white/70">
-              Caso de laboratório: <a href="https://vinac.com.br/" target="_blank" rel="noreferrer" className="text-[var(--accent)]">vinac.com.br</a>
+              Caso de laboratório: base ativa do produto
             </p>
           </div>
         </div>
@@ -515,12 +521,12 @@ export default function KnowledgePage() {
             <input
               value={urlInput}
               onChange={(event) => setUrlInput(event.target.value)}
-              placeholder="https://vinac.com.br/adesao/"
+              placeholder="https://site-do-produto.com.br/adesao/"
               className="mt-4 w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm outline-none focus:border-[var(--accent)]"
             />
             <p className="mt-3 text-xs leading-6 text-white/55">
-              Aceita pagina web, PDF e YouTube. Se colar sem `https://`, o sistema completa automaticamente.
-              Em videos com legenda publica, o transcript entra na indexacao.
+              Aceita página web, PDF e YouTube. Se colar sem `https://`, o sistema completa automaticamente.
+              Em vídeos com legenda pública, o transcript entra na indexação.
             </p>
             <button
               type="submit"
@@ -733,7 +739,7 @@ export default function KnowledgePage() {
               </section>
 
               <section className="rounded-[30px] border border-white/10 bg-white/5 p-6">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Laboratório VINAC</p>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Laboratório do produto</p>
                 <div className="mt-4 rounded-[24px] border border-white/10 bg-black/20 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <strong className="text-sm">Última execução</strong>

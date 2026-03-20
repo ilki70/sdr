@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -14,6 +15,8 @@ class AgentState:
     objections: list[str] = field(default_factory=list)
     retrieved_context: list[str] = field(default_factory=list)
     conversation_history: list[dict[str, str]] = field(default_factory=list)
+    conversation_context: dict[str, Any] = field(default_factory=dict)
+    media_context: list[str] = field(default_factory=list)
     next_action: str = "respond"
     draft_reply: str = ""
     reply_fragments: list[str] = field(default_factory=list)

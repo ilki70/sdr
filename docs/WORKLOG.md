@@ -1,6 +1,132 @@
 # Worklog
 
 ## 2026-03-20
+- Preparei o release candidate do `sdr` para commit/push/release/redeploy:
+  - estabilizei as mudancas de autenticação, contexto multimodal, WhatsApp, knowledge, dashboard e deploy da stack
+  - a validacao local passou com `PYTHONPYCACHEPREFIX=/tmp/sdr-pyc python3 -m compileall -q app tests`
+  - o frontend passou em `npx tsc --noEmit --incremental false` e em `./node_modules/.bin/next build --webpack` na copia limpa em `/home/ilki/tmp/frontend-check`
+- Proximo passo recomendado:
+  - publicar o commit, criar a release e reaplicar a stack `sdr` no Portainer
+
+## 2026-03-20
+- Smoke multimodal do `sdr` validado em producao:
+  - audio local em `/app/test-media/smoke-speech.mp3` foi transcrito como `Quero comprar uma casa em seis meses e tenho duzentos mil de lance`
+  - imagem local em `/app/test-media/smoke-image.png` foi analisada e entrou no contexto da conversa
+  - o agente respondeu usando `property`, prazo e lance, com `reply_fragments` curtos
+- Corrigido o fallback de transcricao em `conversation_media.py` para usar `whisper-1` quando `openai_audio_transcription_model` nao existe no settings
+- A stack `sdr` foi reaplicada no Portainer com bind mounts temporarios para backend, frontend `.next` e gateway, apenas para reiniciar os containers e validar o smoke sem depender de push/GHCR
+- Proximo passo recomendado:
+  - formalizar o fallback de transcricao em config/testes e decidir se o caminho temporario de redeploy local deve virar regressao automatizada
+
+## 2026-03-20
+- Fechei o buffer de mensagens picotadas no `sdr`:
+  - mensagens curtas e fragmentadas agora podem ficar temporariamente em Redis por conversa
+  - se um novo pedaço chegar dentro da janela curta, o backend combina os trechos antes de chamar o agente
+  - o comportamento ficou consistente nos dois caminhos de inbound do WhatsApp
+- Go foi instalado localmente na VPS e o gateway agora compila com toolchain real
+- Validacao executada:
+  - `PYTHONPYCACHEPREFIX=/dev/shm/sdr-pyc python3 -m py_compile ...`
+  - `go build ./...` e `go test ./...` em `services/whatsapp-gateway`
+- Proximo passo recomendado:
+  - fazer smoke real no WhatsApp com uma conversa picotada e anexos de audio/imagem
+
+## 2026-03-20
+- Instalei Go localmente na VPS para eliminar a limitacao de toolchain no `sdr`:
+  - `go version` agora responde `go1.26.1 linux/amd64`
+  - o binario ficou em `~/.local/bin/go` e `~/.local/bin/gofmt`
+  - o gateway `services/whatsapp-gateway` compilou com `go build ./...`
+  - `go test ./...` no gateway passou
+- Proximo passo recomendado:
+  - fazer commit/push do gateway multimodal e redeploy da stack `sdr`
+
+## 2026-03-20
+- Evolução multimodal e de fluxo humano no `sdr`:
+  - a resposta do agente agora pode sair em fragmentos curtos para simular conversa mais natural no WhatsApp
+  - a base de conversa continua usando Redis para reter contexto curto entre turnos
+  - o inbound ganhou suporte para anexos de `audio` e `image`, com resumo/transcrição/análise no backend
+  - o gateway WhatsApp passou a baixar e expor mídia localmente para o backend conseguir ler a URL interna
+- Validação executada:
+  - `PYTHONPYCACHEPREFIX=/dev/shm/sdr-pyc python3 -m py_compile ...` nos arquivos Python alterados
+- Proximo passo recomendado:
+  - compilar/testar o gateway Go e fazer um smoke real com audio e imagem no WhatsApp
+
+## 2026-03-20
+- Adicionado Redis como cache de contexto por conversa no `sdr`:
+  - novo snapshot estruturado com tipo de imovel, valor do bem, prazo, lance e ultima intencao
+  - o inbound do WhatsApp grava esse contexto antes e depois da resposta do agente
+  - o prompt do agente passa a ler o contexto do Redis quando disponivel
+  - o TTL do contexto foi padronizado para 24h via `CONVERSATION_CONTEXT_TTL_SECONDS`
+- Validacao executada:
+  - compilacao direta dos arquivos Python alterados com `compile()`
+- Proximo passo recomendado:
+  - testar um fluxo real de WhatsApp para confirmar que o agente para de perder o fio da conversa
+
+## 2026-03-20
+- Corrigido o comportamento de perda de contexto no agente de conversa:
+  - adicionei memoria estruturada de conversa para guardar tipo de imovel, valor do bem, prazo e lance
+  - o prompt agora recebe essa memoria e nao deve recomeçar a qualificacao quando o lead ja informou os dados
+  - o roteamento de intencao passou a distinguir imovel e lance em vez de cair sempre em `generic`
+  - removi referencias visiveis a VINAC do prompt interno do agente para evitar vazamento de marca antiga
+  - aumentei a janela de historico recente para manter mais turnos crús no contexto
+- Validacao executada:
+  - checagem de sintaxe por `compile()` direto no texto dos arquivos alterados
+  - o host local continua sem um Python do backend ou Docker acessivel para rodar `pytest` completo
+- Proximo passo recomendado:
+  - testar um fluxo real com um lead que informa valor, prazo e lance para confirmar que o agente para de repetir perguntas
+
+## 2026-03-20
+- Removidas as referencias visiveis a VINAC da tela de `Knowledge`:
+  - a hero agora fala em `laboratório do produto`
+  - os botoes de acao usam copy generica de base oficial e laboratorio
+  - o painel lateral passou a mostrar `Caso de laboratório: base ativa do produto`
+  - as mensagens de sucesso e erro da fila tambem foram neutralizadas
+- Validação executada:
+  - `PATH=/home/ilki/.nvm/versions/node/v20.20.1/bin:$PATH npx tsc --noEmit --incremental false`
+- Proximo passo recomendado:
+  - se quiser, a proxima passada pode remover nomes internos legados de `vinac` nas rotas e helpers, sem mudar o comportamento
+
+## 2026-03-20
+- Ajuste de copy no frontend para alinhar a tela de `Knowledge` com o texto operacional desejado:
+  - `CommandBar` agora exibe `Acessos rápidos` com acentuação correta
+  - o hero da `Knowledge` recebeu microcopy com acentos corrigidos
+  - o painel do produto ativo ganhou um destaque visível com o nome atual selecionado
+  - a copy de YouTube/URL foi refinada para mencionar `legenda pública` e `indexação`
+- Validação executada:
+  - `PATH=/home/ilki/.nvm/versions/node/v20.20.1/bin:$PATH npx tsc --noEmit --incremental false`
+- Proximo passo recomendado:
+  - se quiser mais polimento, podemos continuar refinando a tela de `Knowledge` com os atalhos e cards de laboratório
+
+## 2026-03-20
+- Limpeza dos jobs antigos de `Knowledge` concluida:
+  - os 3 jobs `queued` criados antes do worker existir foram removidos do banco
+  - a UI agora mostra apenas o job novo de YouTube que terminou `completed`
+  - isso deixa a fila historica limpa sem afetar o teste validado em producao
+- Proximo passo recomendado:
+  - seguir com novas ingestoes normalmente; a fila atual esta saudavel
+
+## 2026-03-20
+- Descoberto um problema separado no `sdr` que afetava o login do frontend:
+  - o container do frontend conseguia resolver `backend:8000`, mas o alvo retornava `ECONNREFUSED`
+  - o mesmo container respondeu `200` quando apontado para `sdr_backend:8000`
+  - o manifesto da stack foi corrigido para usar `sdr_backend:8000` como URL interna do backend
+- O teste real de Knowledge continua valido:
+  - um job novo de ingestao de YouTube entrou em `completed`
+- Proximo passo recomendado:
+  - redeploy da stack `sdr` para aplicar o backend interno correto e revalidar o login do frontend
+
+## 2026-03-20
+- Validado em producao o fluxo novo de fila do `sdr`:
+  - a stack `sdr` agora sobe com `redis` e um worker Celery dedicado
+  - o backend e o worker convergem no mesmo digest do GHCR
+  - um job novo de `Knowledge` para o video do YouTube foi enfileirado e saiu de `queued` para `completed`
+  - o job de teste terminou com `celery_task_id` preenchido e `result_json` com a fonte indexada
+- Estado observado:
+  - os jobs antigos que haviam sido criados antes do worker entrar em operacao continuam presos em `queued`
+  - o caminho novo, com broker e worker ativos, esta processando corretamente
+- Proximo passo recomendado:
+  - decidir se os jobs antigos devem ser reencaminhados ou deixados como historico morto
+
+## 2026-03-20
 - Corrigido o gargalo de processamento da fila `Knowledge` no `sdr`:
   - a stack de producao passou a incluir `redis` e um `worker` Celery dedicado
   - o backend e o worker agora recebem `REDIS_URL=redis://redis:6379/0`

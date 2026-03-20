@@ -1,15 +1,17 @@
 from datetime import datetime
 from typing import Any
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
 class MessageSimulateRequest(BaseModel):
-    message_text: str = Field(min_length=1, max_length=4000)
+    message_text: str = Field(default="", max_length=4000)
     agent_id: str | None = Field(default=None, max_length=36)
     lead_id: str | None = Field(default=None, max_length=36)
     conversation_id: str | None = Field(default=None, max_length=36)
     channel: str = Field(default="chatwoot", max_length=24)
+    attachments: list["MessageSimulateAttachment"] = Field(default_factory=list)
 
 
 class MessageSimulateResponse(BaseModel):
@@ -19,6 +21,14 @@ class MessageSimulateResponse(BaseModel):
     reply: str
     reply_fragments: list[str] = Field(default_factory=list)
     follow_up_suggestion: str | None = None
+
+
+class MessageSimulateAttachment(BaseModel):
+    kind: Literal["audio", "image", "document", "video", "file"] = "file"
+    file_ref: str = Field(min_length=1, max_length=500)
+    mime_type: str | None = Field(default=None, max_length=80)
+    caption: str | None = Field(default=None, max_length=500)
+    filename: str | None = Field(default=None, max_length=255)
 
 
 class ConversationCreateRequest(BaseModel):

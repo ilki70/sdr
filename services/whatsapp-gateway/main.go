@@ -8,12 +8,15 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	qrcode "github.com/skip2/go-qrcode"
 	"go.mau.fi/whatsmeow"
@@ -45,15 +48,24 @@ type SessionStatus struct {
 }
 
 type InboundPayload struct {
-	TenantID      string    `json:"tenant_id"`
-	IntegrationID string    `json:"integration_id"`
-	ChatID        string    `json:"chat_id"`
-	SenderID      string    `json:"sender_id"`
-	SenderName    string    `json:"sender_name,omitempty"`
-	MessageID     string    `json:"message_id"`
-	MessageText   string    `json:"message_text"`
-	PushName      string    `json:"push_name,omitempty"`
-	SentAt        time.Time `json:"sent_at,omitempty"`
+	TenantID      string            `json:"tenant_id"`
+	IntegrationID string            `json:"integration_id"`
+	ChatID        string            `json:"chat_id"`
+	SenderID      string            `json:"sender_id"`
+	SenderName    string            `json:"sender_name,omitempty"`
+	MessageID     string            `json:"message_id"`
+	MessageText   string            `json:"message_text"`
+	PushName      string            `json:"push_name,omitempty"`
+	SentAt        time.Time         `json:"sent_at,omitempty"`
+	Attachments   []MediaAttachment `json:"attachments,omitempty"`
+}
+
+type MediaAttachment struct {
+	Kind     string `json:"kind"`
+	FileRef  string `json:"file_ref"`
+	MimeType string `json:"mime_type,omitempty"`
+	Caption  string `json:"caption,omitempty"`
+	Filename string `json:"filename,omitempty"`
 }
 
 type InboundResponse struct {
@@ -91,6 +103,7 @@ func main() {
 	mux.HandleFunc("/api/v1/session/connect", manager.handleConnect)
 	mux.HandleFunc("/api/v1/session/disconnect", manager.handleDisconnect)
 	mux.HandleFunc("/api/v1/session/status", manager.handleStatus)
+	mux.HandleFunc("/api/v1/media/", manager.handleMedia)
 
 	server := &http.Server{
 		Addr:              ":" + port,
@@ -106,6 +119,9 @@ func main() {
 
 func NewManager(dataDir string, gatewaySecret string) (*Manager, error) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Join(dataDir, "media"), 0o755); err != nil {
 		return nil, err
 	}
 
@@ -351,14 +367,15 @@ func (m *Manager) handleEvent(raw interface{}) {
 			return
 		}
 		messageText := extractText(evt.Message)
-		if strings.TrimSpace(messageText) == "" {
+		attachments := extractAttachments(m.client, m.dataDir, evt)
+		if strings.TrimSpace(messageText) == "" && len(attachments) == 0 {
 			return
 		}
-		go m.forwardInbound(evt, messageText)
+		go m.forwardInbound(evt, messageText, attachments)
 	}
 }
 
-func (m *Manager) forwardInbound(evt *events.Message, messageText string) {
+func (m *Manager) forwardInbound(evt *events.Message, messageText string, attachments []MediaAttachment) {
 	cfg := m.snapshotConfig()
 	if cfg.CallbackURL == "" {
 		m.updateStatus(func(status *SessionStatus) {
@@ -381,6 +398,7 @@ func (m *Manager) forwardInbound(evt *events.Message, messageText string) {
 		MessageText:   messageText,
 		PushName:      evt.Info.PushName,
 		SentAt:        evt.Info.Timestamp,
+		Attachments:   attachments,
 	}
 
 	body, err := json.Marshal(payload)
@@ -414,7 +432,7 @@ func (m *Manager) forwardInbound(evt *events.Message, messageText string) {
 		m.updateStatus(func(status *SessionStatus) { status.LastError = err.Error() })
 		return
 	}
-	if inboundResponse.Duplicate || strings.TrimSpace(inboundResponse.ReplyText) == "" {
+	if inboundResponse.Duplicate || (strings.TrimSpace(inboundResponse.ReplyText) == "" && len(inboundResponse.ReplyFragments) == 0) {
 		return
 	}
 
@@ -423,8 +441,7 @@ func (m *Manager) forwardInbound(evt *events.Message, messageText string) {
 		m.updateStatus(func(status *SessionStatus) { status.LastError = err.Error() })
 		return
 	}
-	_, err = m.client.SendMessage(context.Background(), jid, &waProto.Message{Conversation: proto.String(inboundResponse.ReplyText)})
-	if err != nil {
+	if err = sendFragmentedReply(context.Background(), m.client, jid, inboundResponse.ReplyFragments, inboundResponse.ReplyText); err != nil {
 		m.updateStatus(func(status *SessionStatus) { status.LastError = err.Error() })
 		return
 	}
@@ -442,7 +459,240 @@ func extractText(message *waProto.Message) string {
 			return text
 		}
 	}
+	if image := message.GetImageMessage(); image != nil {
+		if caption := strings.TrimSpace(image.GetCaption()); caption != "" {
+			return caption
+		}
+	}
+	if video := message.GetVideoMessage(); video != nil {
+		if caption := strings.TrimSpace(video.GetCaption()); caption != "" {
+			return caption
+		}
+	}
+	if document := message.GetDocumentMessage(); document != nil {
+		if caption := strings.TrimSpace(document.GetCaption()); caption != "" {
+			return caption
+		}
+	}
 	return ""
+}
+
+func extractAttachments(client *whatsmeow.Client, dataDir string, evt *events.Message) []MediaAttachment {
+	if evt == nil || evt.Message == nil {
+		return nil
+	}
+
+	if image := evt.Message.GetImageMessage(); image != nil {
+		if attachment, err := storeDownloadedMedia(client, dataDir, evt, "image", image.GetMimetype(), image.GetCaption(), image); err == nil {
+			return []MediaAttachment{attachment}
+		}
+	}
+	if audio := evt.Message.GetAudioMessage(); audio != nil {
+		if attachment, err := storeDownloadedMedia(client, dataDir, evt, "audio", audio.GetMimetype(), "", audio); err == nil {
+			return []MediaAttachment{attachment}
+		}
+	}
+	if video := evt.Message.GetVideoMessage(); video != nil {
+		if attachment, err := storeDownloadedMedia(client, dataDir, evt, "video", video.GetMimetype(), video.GetCaption(), video); err == nil {
+			return []MediaAttachment{attachment}
+		}
+	}
+	if document := evt.Message.GetDocumentMessage(); document != nil {
+		if attachment, err := storeDownloadedMedia(client, dataDir, evt, "document", document.GetMimetype(), document.GetCaption(), document); err == nil {
+			return []MediaAttachment{attachment}
+		}
+	}
+	return nil
+}
+
+func storeDownloadedMedia(client *whatsmeow.Client, dataDir string, evt *events.Message, kind string, mimeType string, caption string, downloadable interface{}) (MediaAttachment, error) {
+	mediaMsg, ok := downloadable.(interface {
+		GetDirectPath() string
+		GetMediaKey() []byte
+		GetFileSHA256() []byte
+		GetFileEncSHA256() []byte
+	})
+	if !ok {
+		return MediaAttachment{}, errors.New("unsupported media payload")
+	}
+	_ = mediaMsg
+	attachmentType := kind
+	if attachmentType == "" {
+		attachmentType = "file"
+	}
+
+	payload, err := client.Download(context.Background(), mediaMsg)
+	if err != nil {
+		return MediaAttachment{}, err
+	}
+
+	ext := guessMediaExtension(kind, mimeType)
+	filename := buildMediaFilename(evt.Info.ID, attachmentType, ext)
+	mediaDir := filepath.Join(dataDir, "media")
+	if err := os.MkdirAll(mediaDir, 0o755); err != nil {
+		return MediaAttachment{}, err
+	}
+	fullPath := filepath.Join(mediaDir, filename)
+	if err := os.WriteFile(fullPath, payload, 0o600); err != nil {
+		return MediaAttachment{}, err
+	}
+
+	baseURL := "http://whatsapp-gateway:8090"
+	return MediaAttachment{
+		Kind:     attachmentType,
+		FileRef:  baseURL + "/api/v1/media/" + url.PathEscape(filename),
+		MimeType: mimeType,
+		Caption:  strings.TrimSpace(caption),
+		Filename: filename,
+	}, nil
+}
+
+func guessMediaExtension(kind string, mimeType string) string {
+	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+	if mimeType != "" {
+		if exts, err := mime.ExtensionsByType(mimeType); err == nil && len(exts) > 0 {
+			return exts[0]
+		}
+		switch {
+		case strings.Contains(mimeType, "ogg"):
+			return ".ogg"
+		case strings.Contains(mimeType, "opus"):
+			return ".opus"
+		case strings.Contains(mimeType, "mpeg"):
+			return ".mp3"
+		case strings.Contains(mimeType, "wav"):
+			return ".wav"
+		case strings.Contains(mimeType, "jpeg"):
+			return ".jpg"
+		case strings.Contains(mimeType, "png"):
+			return ".png"
+		case strings.Contains(mimeType, "webp"):
+			return ".webp"
+		case strings.Contains(mimeType, "mp4"):
+			if kind == "audio" {
+				return ".m4a"
+			}
+			return ".mp4"
+		}
+	}
+	switch kind {
+	case "image":
+		return ".jpg"
+	case "audio":
+		return ".ogg"
+	case "video":
+		return ".mp4"
+	case "document":
+		return ".pdf"
+	default:
+		return ""
+	}
+}
+
+func buildMediaFilename(messageID string, kind string, ext string) string {
+	base := sanitizeFilename(messageID)
+	if base == "" {
+		base = "media"
+	}
+	k := sanitizeFilename(kind)
+	if k != "" {
+		base = base + "-" + k
+	}
+	ts := time.Now().UTC().Format("20060102T150405.000000000Z")
+	return fmt.Sprintf("%s-%s%s", base, ts, ext)
+}
+
+func sanitizeFilename(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var builder strings.Builder
+	for _, r := range value {
+		switch {
+		case unicode.IsLetter(r), unicode.IsDigit(r), r == '-', r == '_':
+			builder.WriteRune(r)
+		case r == '.' || r == '/':
+			builder.WriteRune('-')
+		}
+	}
+	return strings.Trim(builder.String(), "-_")
+}
+
+func (m *Manager) handleMedia(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"message": "method not allowed"})
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, "/api/v1/media/")
+	name = filepath.Base(name)
+	if name == "." || name == "/" || name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid media reference"})
+		return
+	}
+	fullPath := filepath.Join(m.dataDir, "media", name)
+	if _, err := os.Stat(fullPath); err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "media not found"})
+		return
+	}
+	if contentType := mime.TypeByExtension(filepath.Ext(name)); contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+	http.ServeFile(w, r, fullPath)
+}
+
+func chunkReplyText(text string, maxChars int) []string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+	parts := strings.Fields(text)
+	if len(parts) == 0 {
+		return []string{text}
+	}
+
+	var chunks []string
+	current := ""
+	for _, part := range parts {
+		candidate := part
+		if current != "" {
+			candidate = current + " " + part
+		}
+		if len(candidate) <= maxChars {
+			current = candidate
+			continue
+		}
+		if current != "" {
+			chunks = append(chunks, strings.TrimSpace(current))
+		}
+		current = part
+	}
+	if current != "" {
+		chunks = append(chunks, strings.TrimSpace(current))
+	}
+	return chunks
+}
+
+func sendFragmentedReply(ctx context.Context, client *whatsmeow.Client, jid types.JID, fragments []string, fallback string) error {
+	toSend := fragments
+	if len(toSend) == 0 {
+		toSend = chunkReplyText(fallback, 180)
+	}
+	if len(toSend) == 0 {
+		return nil
+	}
+
+	for idx, fragment := range toSend {
+		fragment = strings.TrimSpace(fragment)
+		if fragment == "" {
+			continue
+		}
+		_, err := client.SendMessage(ctx, jid, &waProto.Message{Conversation: proto.String(fragment)})
+		if err != nil {
+			return err
+		}
+		if idx < len(toSend)-1 {
+			time.Sleep(650 * time.Millisecond)
+		}
+	}
+	return nil
 }
 
 func qrCodeDataURL(raw string) (string, error) {
