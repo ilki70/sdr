@@ -9,7 +9,7 @@ import zipfile
 from hashlib import sha256
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import parse_qs, quote_plus, urlparse
 from uuid import uuid4
 
 import httpx
@@ -23,9 +23,15 @@ from app.models.entities import KnowledgeChunk, KnowledgeSource
 from app.services.knowledge_ops import record_source_version
 from app.services.vector_store import delete_source_chunks, search_rag_context, upsert_source_chunks
 
+try:
+    from youtube_transcript_api import YouTubeTranscriptApi
+except ImportError:  # pragma: no cover - optional dependency in local/dev environments
+    YouTubeTranscriptApi = None
+
 logger = logging.getLogger(__name__)
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+YOUTUBE_TRANSCRIPT_LANGUAGES = ("pt-BR", "pt", "en")
 
 TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 DESCRIPTION_RE = re.compile(
@@ -123,19 +129,74 @@ def _extract_plain_text(binary_content: bytes, source_ref: str) -> ExtractedSour
 
 
 async def _extract_youtube_text(client: httpx.AsyncClient, source_ref: str) -> ExtractedSource:
+    video_id = _extract_youtube_video_id(source_ref)
     oembed_url = f"https://www.youtube.com/oembed?url={quote_plus(source_ref)}&format=json"
     response = await client.get(oembed_url, timeout=20.0)
     response.raise_for_status()
     payload = response.json()
     title = payload.get("title", "Video YouTube")
     author_name = payload.get("author_name", "canal oficial")
-    summary = f"Video oficial do YouTube: {title}. Canal: {author_name}."
-    content = (
-        f"TITULO: {title}\n"
-        f"DESCRICAO: {summary}\n"
-        f"CONTEUDO: Use este video como referencia oficial de funcionamento e apresentacao do produto."
-    )
+    transcript_text = await _extract_youtube_transcript(video_id) if video_id else None
+    transcript_excerpt = transcript_text[:280].strip() if transcript_text else ""
+    summary = transcript_excerpt or f"Video oficial do YouTube: {title}. Canal: {author_name}."
+    if transcript_text:
+        content = (
+            f"TITULO: {title}\n"
+            f"AUTOR: {author_name}\n"
+            f"DESCRICAO: {summary}\n"
+            f"TRANSCRICAO: {transcript_text}\n"
+            f"CONTEUDO: {transcript_text}"
+        )
+    else:
+        content = (
+            f"TITULO: {title}\n"
+            f"AUTOR: {author_name}\n"
+            f"DESCRICAO: {summary}\n"
+            f"CONTEUDO: Use este video como referencia oficial de funcionamento e apresentacao do produto."
+        )
     return ExtractedSource(source_type="youtube_video", title=title, summary=summary, content=content)
+
+
+def _extract_youtube_video_id(source_ref: str) -> str | None:
+    parsed = urlparse(source_ref)
+    hostname = parsed.netloc.lower()
+    if hostname.endswith("youtu.be"):
+        candidate = parsed.path.strip("/").split("/")[0]
+        return candidate or None
+    if "youtube.com" not in hostname:
+        return None
+
+    query = parse_qs(parsed.query)
+    video_id = query.get("v", [None])[0]
+    if video_id:
+        return video_id
+
+    path_parts = [part for part in parsed.path.split("/") if part]
+    if len(path_parts) >= 2 and path_parts[0] in {"embed", "shorts", "live"}:
+        return path_parts[1] or None
+    return None
+
+
+async def _extract_youtube_transcript(video_id: str | None) -> str | None:
+    if not video_id or YouTubeTranscriptApi is None:
+        return None
+
+    try:
+        transcript_api = YouTubeTranscriptApi()
+        transcript = transcript_api.fetch(video_id, languages=YOUTUBE_TRANSCRIPT_LANGUAGES)
+        raw_segments = transcript.to_raw_data()
+    except Exception:
+        logger.info("youtube_transcript_unavailable", extra={"video_id": video_id}, exc_info=True)
+        return None
+
+    segments: list[str] = []
+    for segment in raw_segments:
+        text = _normalize_text(str(segment.get("text", "")))
+        if text:
+            segments.append(text)
+
+    transcript_text = _normalize_text(" ".join(segments))
+    return transcript_text or None
 
 
 def _resolve_local_path(source_ref: str) -> Path | None:

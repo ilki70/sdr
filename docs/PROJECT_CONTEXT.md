@@ -18,15 +18,18 @@ Plataforma interna de operacao comercial com agentes de IA, backend FastAPI, fro
 - Evoluir o frontend para configurar comportamento do agente, ingerir conhecimento e acompanhar atendimentos em tempo real.
 - Manter o bootstrap local funcional enquanto a nova linha de produto evolui.
 - Manter um caminho administrativo de recuperacao de acesso para usuarios/tenants, sem expor reset publico irrestrito.
+- Garantir que o deploy `sdr` siga bootstrapando migrations no backend e use `sdr_backend` como alias interno no Swarm.
 
 ## Key References
 - Main overview: `/home/ilki/sdr/README.md`
 - Product/backend docs: `/home/ilki/sdr/docs/`
 - Frontend app: `/home/ilki/sdr/frontend`
 - Backend app: `/home/ilki/sdr/backend`
-- Deploy stack: `/home/ilki/sdr/deploy/atendente3`
+- Deploy stack: `/home/ilki/sdr/deploy/atendente3` (pasta historica; namespace da stack em producao: `sdr`)
 
 ## Notes For Future Sessions
 - Ler `docs/WORKLOG.md` antes de editar para captar o estado mais recente.
 - Registrar progresso transiente no worklog, mantendo aqui apenas contexto duravel.
 - O foco atual e a adaptacao do `sdr` para um sistema interno de SDR/closer assistido para consorcios, com RAG de documentos e videos YouTube, monitoria de conversas e handoff humano quando necessario.
+- A stack de producao deve ser tratada como `sdr`; `atendente3` continua apenas como nome historico em alguns caminhos, variaveis e recursos legados.
+- A base de conhecimento ja aceita videos YouTube como fonte e tenta extrair transcript completo quando a legenda estiver disponivel, usando o oEmbed como fallback.

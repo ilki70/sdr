@@ -1,6 +1,28 @@
 # Worklog
 
 ## 2026-03-19
+- Implementada a ingestao de transcricao de videos YouTube na base de conhecimento:
+  - o backend agora extrai transcript quando disponivel e inclui esse texto no `content` indexado para RAG
+  - o caminho continua com fallback para o comportamento anterior via oEmbed quando o transcript nao existe ou nao pode ser obtido
+  - adicionado helper de parsing de video ID para URLs `watch`, `youtu.be`, `shorts`, `embed` e `live`
+- Dependencias atualizadas:
+  - adicionado `youtube-transcript-api` em `backend/requirements.txt`
+- Cobertura adicionada:
+  - `backend/tests/test_knowledge_youtube.py`
+- Validacao executada:
+  - `PYTHONPYCACHEPREFIX=/dev/shm/sdr-pyc python3 -m py_compile backend/app/services/knowledge.py backend/tests/test_knowledge_youtube.py` -> ok
+  - `cd backend && python3 -m pytest -q tests/test_knowledge_youtube.py` -> `2 passed`
+- Proximo passo recomendado:
+  - publicar o commit e, se desejado, ajustar a interface de knowledge para deixar claro quando uma fonte YouTube foi indexada com transcript completo
+
+## 2026-03-19
+- Ajustado o contexto do deploy para refletir o nome atual da stack em producao:
+  - a stack deve ser referida como `sdr`
+  - `atendente3` ficou como nome historico da pasta `deploy/atendente3` e de alguns recursos legados
+- Proximo passo recomendado:
+  - continuar usando `sdr` nas proximas atualizacoes de Portainer, documentação e releases, evitando criar mais referencias novas a `atendente3`
+
+## 2026-03-19
 - Corrigida a compatibilidade do frontend com a rota legacy `/api/auth/providers`:
   - adicionado handler Next.js em `frontend/app/api/auth/providers/route.ts`
   - a resposta expõe um provider `credentials` simples, suficiente para smoke checks e contratos antigos
@@ -34,18 +56,18 @@
 ## 2026-03-10
 - Clonado o repositorio `sdr` em `/home/ilki/sdr`.
 - Criados `docs/PROJECT_CONTEXT.md` e `docs/WORKLOG.md` para persistencia de contexto local.
-- Portado para este repositório o material inicial de deploy da stack `atendente3`: `deploy/atendente3/stack.yml`, `.env.example` e `README.md`.
+- Portado para este repositório o material inicial de deploy da stack, hoje tratada em producao como `sdr`: `deploy/atendente3/stack.yml`, `.env.example` e `README.md`.
 - Adicionados Dockerfiles e `.dockerignore` para `backend` e `frontend`.
 - Ajustado o backend para aceitar `DATABASE_URL` generico com compatibilidade inicial para Postgres via `asyncpg`/`psycopg`.
 - Adicionado workflow GitHub Actions para publicar imagens `backend` e `frontend` no GHCR do proprio repositório `sdr`.
-- Atualizado o `README.md` raiz para apontar para o deploy versionado do `atendente3`.
+- Atualizado o `README.md` raiz para apontar para o deploy versionado da stack `sdr`.
 - Corrigido o manifesto de deploy para usar as variaveis e portas realmente esperadas pelo código versionado (`DATABASE_URL`, `OPENAI_MODEL`, `BACKEND_INTERNAL_URL`, `SESSION_SECRET` e frontend em `3000`).
 - Adicionado `whatsapp-service` versionado ao repositório, com Dockerfile, API mínima de relay para o backend e log local em `/data/events.jsonl`.
 - Adicionado ao backend o webhook público `/api/v1/whatsapp/webhook` para processar mensagens inbound, manter lead/conversa e devolver a resposta do agente.
 - Atualizados workflow GHCR, stack e documentação para usar a imagem `ghcr.io/ilki70/sdr/whatsapp-service:latest`.
 
 ## 2026-03-11
-- Retomada a revisão das mudanças locais do `sdr` antes de qualquer alinhamento da stack `atendente3` na VPS.
+- Retomada a revisão das mudanças locais do `sdr` antes de qualquer alinhamento da stack `sdr` na VPS.
 - Confirmado que o repositório local já contém a linha de deploy versionada (`deploy/atendente3`), workflow GHCR, Dockerfiles e a integração mínima de WhatsApp no backend e no serviço dedicado.
 - Identificado um risco importante no manifesto versionado: todos os serviços da stack estavam ligados direto à rede externa `orfinet3`, o que expunha o alias `postgres` a colisões com outros stacks no mesmo Swarm.
 - Corrigido `deploy/atendente3/stack.yml` para usar uma rede overlay interna da stack (`internal`) entre `postgres`, `backend`, `frontend`, `db-admin` e `whatsapp-service`, mantendo `orfinet3` apenas onde há roteamento Traefik.
@@ -58,22 +80,22 @@
 - Mantidos fora dos commits apenas os arquivos locais de contexto `docs/PROJECT_CONTEXT.md` e `docs/WORKLOG.md`.
 - Enviado `main` para o GitHub com os commits `f59f303` e `b4d25f1`.
 - Feito build local na VPS das imagens `atendente3/backend:latest`, `atendente3/frontend:latest` e `atendente3/whatsapp-service:latest` a partir do repositório `sdr`.
-- Substituida a definicao persistida da stack `atendente3` no Portainer pela versao alinhada do repositório, mantendo o uso das imagens locais para este rollout.
-- Redeployada a stack `atendente3` no Swarm com os servicos `postgres`, `backend`, `frontend`, `db-admin` e `whatsapp-service`.
+- Substituida a definicao persistida da stack `sdr` no Portainer pela versao alinhada do repositório, mantendo o uso das imagens locais para este rollout.
+- Redeployada a stack `sdr` no Swarm com os servicos `postgres`, `backend`, `frontend`, `db-admin` e `whatsapp-service`.
 - Validacoes apos rollout:
   - todos os servicos ficaram `1/1`
-  - `frontend` publico respondeu HTTP 200 em `https://atendente3.orfi.com.br`
+  - `frontend` publico respondeu HTTP 200 em `https://pulse.orfi.com.br`
   - `db-admin` respondeu HTTP 403 fora da allowlist esperada
   - `backend` e `whatsapp-service` subiram sem erro nos logs de bootstrap
   - `whatsapp-service` respondeu `{\"status\":\"ok\"...}` no endpoint `/health`
-  - `backend`, `postgres` e `whatsapp-service` ficaram isolados na rede `atendente3_internal`
+  - `backend`, `postgres` e `whatsapp-service` ficaram isolados na rede `sdr_internal`
 
 ## Current Status
-- Repositorio local preparado para evoluir o deploy do `atendente3`.
-- A stack `atendente3` agora esta descrita no repositório e `backend`/`frontend`/`whatsapp-service` podem ser gerados por ele.
+- Repositorio local preparado para evoluir o deploy do `sdr`.
+- A stack `sdr` agora esta descrita no repositório e `backend`/`frontend`/`whatsapp-service` podem ser gerados por ele.
 - O fluxo WhatsApp agora tem uma implementacao versionada ponta a ponta, ainda com contrato minimo e sem adaptador para um provedor real.
 - O manifesto versionado do deploy ficou mais seguro para Swarm compartilhado e esta pronto para comparação final com a stack antiga do Portainer.
-- A producao da stack `atendente3` foi alinhada com essa linha versionada usando imagens locais geradas a partir do repo.
+- A producao da stack `sdr` foi alinhada com essa linha versionada usando imagens locais geradas a partir do repo.
 - Permanecem secrets/defaults placeholder na stack em producao, principalmente `SESSION_SECRET` do frontend e `WHATSAPP_WEBHOOK_SECRET` do `whatsapp-service`.
 
 ## Next Recommended Step
