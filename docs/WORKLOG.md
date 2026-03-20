@@ -1,6 +1,16 @@
 # Worklog
 
 ## 2026-03-20
+- Sincronizacao da retomada do `sdr` consolidada sobre o `main` remoto:
+  - o clone legado em `/home/ilki/sdr` foi reorganizado em quatro commits locais, mas o `main` remoto ja continha quase toda essa linha por outros hashes
+  - o delta real reaplicado sobre o `main` limpo ficou reduzido a uma correção no inbound do WhatsApp e ao teste correspondente
+  - a correção salva `payload.message_id` em `external_message_id` no `whatsapp_gateway`, alinhando backend e payload real do gateway
+- Status atual:
+  - a base limpa de sincronizacao passou a viver em `/home/ilki/tmp/sdr-sync-20260320`
+- Proximo passo recomendado:
+  - validar o teste dedicado do gateway, revisar o branch limpo e publicar essa delta minima
+
+## 2026-03-20
 - Fechei o ciclo de publicacao do `sdr`:
   - commit, push, release `v0.2.3` e redeploy da stack `sdr` concluidos
   - o Portainer ficou alinhado ao `deploy/sdr/stack.yml` do repositorio

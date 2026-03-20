@@ -350,7 +350,7 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
         sender_type="lead",
         direction="inbound",
         content=effective_message_text,
-        external_message_id=payload.external_message_id,
+        external_message_id=payload.message_id,
         metadata_json={
             "source": "whatsapp_gateway",
             "chat_id": payload.chat_id,

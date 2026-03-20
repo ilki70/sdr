@@ -39,3 +39,4 @@ Plataforma interna de operacao comercial com agentes de IA, backend FastAPI, fro
 - O contexto curto de conversa agora e cacheado em Redis por `conversation_id` para evitar repeticao de perguntas e preservar `imovel`, `valor`, `prazo` e `lance` entre turnos.
 - O fluxo de WhatsApp agora tambem leva `audio` e `image` para o backend via anexos, com transcricao/analisador multimodal quando houver arquivo disponivel.
 - O agente pode responder em fragmentos curtos para simular conversa mais humana no canal.
+- O clone legado em `/home/ilki/sdr` ficou com arquivos `root:root` dentro de `.git`; se for necessario reaproveita-lo, usar `GIT_OBJECT_DIRECTORY=/home/ilki/sdr/.git/objects-user` para gravar novos objetos.

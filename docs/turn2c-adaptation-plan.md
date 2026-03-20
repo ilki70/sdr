@@ -14,6 +14,7 @@ Adaptar o `sdr` para uso interno da equipe em operacao de consorcios com a Turn2
 - Ingestao de documentos, URLs e YouTube via RAG.
 - Streaming SSE para simulacao de conversas.
 - WhatsApp gateway real com QR pairing.
+- Recuperacao administrativa de acesso para usuarios internos.
 
 ## Gaps For This Scenario
 1. O front de agentes ainda e generico e precisa virar um configurador operacional de playbooks de consorcio.
@@ -74,3 +75,4 @@ Adaptar o `sdr` para uso interno da equipe em operacao de consorcios com a Turn2
 
 ## Next Concrete Step
 - Priorizar a criacao de um novo "consorcios studio" no frontend e expandir os schemas/backend para playbooks de agente, knowledge organizado e inbox operacional.
+- Manter o canal WhatsApp real coberto por teste de regressao no backend, especialmente no contrato `message_id` -> `external_message_id`.
