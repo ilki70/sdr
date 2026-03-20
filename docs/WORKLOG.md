@@ -1,6 +1,18 @@
 # Worklog
 
 ## 2026-03-20
+- Publicada a branch de sincronizacao `chore/resume-local-2026-03-20` no GitHub a partir do clone limpo em `/home/ilki/tmp/sdr-sync-20260320`.
+- Delta publicado:
+  - correção do `whatsapp_gateway` para persistir `payload.message_id` em `external_message_id`
+  - teste de regressao dedicado em `backend/tests/test_whatsapp_gateway.py`
+  - atualizacao dos docs locais de contexto (`PROJECT_CONTEXT`, `WORKLOG`, `turn2c-adaptation-plan`)
+- Referencia:
+  - branch remota `chore/resume-local-2026-03-20`
+  - commit publicado `e283651 fix: align whatsapp gateway message id handling`
+- Proximo passo recomendado:
+  - abrir/revisar o PR da branch e decidir se o clone antigo em `/home/ilki/sdr` ainda precisa ser recuperado ou pode ser descartado em favor do clone limpo
+
+## 2026-03-20
 - Sincronizacao da retomada do `sdr` consolidada sobre o `main` remoto:
   - o clone legado em `/home/ilki/sdr` foi reorganizado em quatro commits locais, mas o `main` remoto ja continha quase toda essa linha por outros hashes
   - o delta real reaplicado sobre o `main` limpo ficou reduzido a uma correção no inbound do WhatsApp e ao teste correspondente
