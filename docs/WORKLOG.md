@@ -1,6 +1,24 @@
 # Worklog
 
 ## 2026-03-19
+- Corrigida a compatibilidade do frontend com a rota legacy `/api/auth/providers`:
+  - adicionado handler Next.js em `frontend/app/api/auth/providers/route.ts`
+  - a resposta expõe um provider `credentials` simples, suficiente para smoke checks e contratos antigos
+- Validacao executada:
+  - `PATH=/home/ilki/.nvm/versions/node/v20.20.1/bin:$PATH npm run typecheck` -> ok
+  - `PATH=/home/ilki/.nvm/versions/node/v20.20.1/bin:$PATH npx next build --webpack` -> ok
+- Observacao de ambiente:
+  - o build Turbopack no checkout principal esbarra em artefatos `.next` e `tsconfig.tsbuildinfo` root-owned; a validacao ficou consistente usando uma copia efemera em `/dev/shm` com Webpack
+- Proximo passo recomendado:
+  - confirmar em producao se `/api/auth/providers` volta a responder `200` no rollout seguinte da stack `sdr`
+
+## 2026-03-19
+- Reescrito o `README.md` raiz para refletir o estado atual do `sdr` como `Orfi Pulse`.
+- O README agora descreve a plataforma interna de operacao comercial para consorcios/Turn2C, os modulos do menu, o fluxo recomendado de uso, a autenticacao multi-tenant, o caminho administrativo de reset e o deploy atual com `sdr_backend` e migrations no boot.
+- Proximo passo recomendado:
+  - manter README, `PROJECT_CONTEXT.md` e `WORKLOG.md` alinhados sempre que o escopo do produto ou a estrategia de deploy mudar.
+
+## 2026-03-19
 - Validação pública da stack `sdr` mostrou que o hub novo de consórcios ja esta ativo em `https://pulse.orfi.com.br/consorcios` com HTTP `200`.
 - As subrotas novas ainda nao estao publicadas na stack em producao:
   - `/consorcios/playbook` -> `404`
@@ -269,6 +287,16 @@
 - O deploy versionado passou a expor `ADMIN_RESET_SECRET` como variavel de recuperacao.
 - Proximo passo:
   - publicar a nova imagem, ligar uma chave temporaria de recuperacao no Portainer e usar o reset para a conta `ilki70@gmail.com`
+
+## 2026-03-19
+- Recuperacao concluida no `sdr`:
+  - stack `sdr` foi ajustada no Portainer para usar `sdr_backend` no `BACKEND_INTERNAL_URL`
+  - backend passou a subir com `alembic upgrade head && uvicorn ...`, criando o schema automaticamente no boot
+  - `SESSION_SECRET`, `WHATSAPP_GATEWAY_SECRET` e `ADMIN_RESET_SECRET` foram repassados via `Env` do stack para evitar defaults invalidos
+  - reset administrativo da conta `ilki70@gmail.com` em `tenant-lab` foi executado com sucesso
+  - smoke final ok em `/api/auth/login`, `/api/auth/session`, `/api/proxy/dashboard/overview` e `/health`
+- Proximo passo:
+  - se precisar, adicionar uma tela interna de admin para executar resets sem curl
 - Principais lacunas mapeadas:
   - configurador operacional de agente para consorcios
   - knowledge studio com docs, URLs e YouTube organizados por tema/agente
