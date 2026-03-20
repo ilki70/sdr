@@ -4,7 +4,7 @@ Esta pasta versiona a definicao historica da stack `atendente3`, hoje operando e
 
 ## O que foi alinhado
 
-- Servicos atuais: `postgres`, `backend`, `frontend`, `db-admin` e `whatsapp-gateway`
+- Servicos atuais: `redis`, `postgres`, `backend`, `worker`, `frontend`, `db-admin` e `whatsapp-gateway`
 - Rotas Traefik:
   - `pulse.orfi.com.br` -> `frontend`
   - `pulse-db.orfi.com.br` -> `db-admin`
@@ -15,11 +15,14 @@ Esta pasta versiona a definicao historica da stack `atendente3`, hoje operando e
 
 ## Estado do alinhamento
 
-As tres imagens da stack agora podem ser geradas a partir deste repositorio:
+As imagens da stack agora podem ser geradas a partir deste repositorio:
 
+- `redis:7-alpine`
 - `ghcr.io/ilki70/sdr/backend:latest`
 - `ghcr.io/ilki70/sdr/frontend:latest`
 - `ghcr.io/ilki70/sdr/whatsapp-gateway:latest`
+
+O `worker` usa a mesma imagem do backend e consome a fila Celery de `knowledge` e `quality` com `REDIS_URL=redis://redis:6379/0`.
 
 O `whatsapp-gateway` versionado usa `whatsmeow`, expoe pareamento por QR code, persiste a sessao em `/data/session.db` e encaminha mensagens recebidas ao backend em `/api/v1/whatsapp/inbound`.
 
@@ -56,7 +59,7 @@ Os nomes internos `atendente3_*` ainda aparecem em alguns recursos e variaveis p
 
 1. Ajuste um arquivo `.env` a partir de `.env.example`.
 2. Verifique que a rede externa configurada em `TRAEFIK_NETWORK` existe no Swarm.
-3. O manifesto cria uma rede overlay interna da stack para trafego entre `postgres`, `backend`, `frontend`, `db-admin` e `whatsapp-gateway`, mantendo a rede Traefik externa apenas para o que precisa passar pelo proxy.
+3. O manifesto cria uma rede overlay interna da stack para trafego entre `redis`, `postgres`, `backend`, `worker`, `frontend`, `db-admin` e `whatsapp-gateway`, mantendo a rede Traefik externa apenas para o que precisa passar pelo proxy.
 4. Faça o deploy:
 
 ```bash

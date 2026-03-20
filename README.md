@@ -103,6 +103,7 @@ O deploy de producao roda como stack `sdr` no Portainer.
 Pontos importantes do deploy atual:
 
 - o backend sobe com `alembic upgrade head` no boot
+- a stack inclui `redis` e um worker Celery dedicado para consumir a fila de `Knowledge` e `Quality`
 - o alias interno do backend no Swarm e `sdr_backend`
 - os segredos esperados incluem `SESSION_SECRET`, `WHATSAPP_GATEWAY_SECRET` e `ADMIN_RESET_SECRET`
 

@@ -1,6 +1,22 @@
 # Worklog
 
 ## 2026-03-20
+- Corrigido o gargalo de processamento da fila `Knowledge` no `sdr`:
+  - a stack de producao passou a incluir `redis` e um `worker` Celery dedicado
+  - o backend e o worker agora recebem `REDIS_URL=redis://redis:6379/0`
+  - o worker usa a mesma imagem do backend e consome as filas de ingestao e avaliacao
+  - sem esse componente, os jobs ficavam eternamente em `queued` mesmo quando a URL era aceita pela API
+- Ajustes de documentação:
+  - `README.md` raiz menciona a nova peça de infra
+  - `deploy/atendente3/README.md` agora descreve explicitamente `redis` e `worker`
+  - `docs/PROJECT_CONTEXT.md` passou a registrar a topologia de producao atual
+- Validação já executada antes do redeploy:
+  - criação do cliente e produto de teste via API funcionou
+  - a submissão da URL do YouTube foi aceita e gerou jobs `queued`, confirmando que o problema era a falta do consumidor assíncrono
+- Proximo passo recomendado:
+  - commit/push/release da stack atualizada e redeploy no Portainer para ativar o worker
+
+## 2026-03-20
 - Corrigido o fluxo de ingestao de URL no `Knowledge` para aceitar links de YouTube colados sem `https://`:
   - o backend agora normaliza `www.youtube.com/...`, `youtube.com/...` e `youtu.be/...` para URL completa antes de resolver a fonte
   - o frontend tambem passa a completar o esquema automaticamente e avisa isso na UI

@@ -1,4 +1,14 @@
 services:
+  redis:
+    image: redis:7-alpine@sha256:8b81dd37ff027bec4e516d41acfbe9fe2460070dc6d4a4570a2ac5b9d59df065
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - sdr_redis_data:/data
+    networks:
+      - internal
+    deploy:
+      replicas: 1
+
   postgres:
     image: postgres:16-alpine@sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416
     environment:
@@ -20,6 +30,32 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://atendente3:atendente3@postgres:5432/atendente3}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_TASK_ALWAYS_EAGER: ${CELERY_TASK_ALWAYS_EAGER:-false}
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
+      WHATSAPP_GATEWAY_BASE_URL: ${WHATSAPP_GATEWAY_BASE_URL:-http://whatsapp-gateway:8090}
+      WHATSAPP_GATEWAY_SECRET: ${WHATSAPP_GATEWAY_SECRET:-replace-with-gateway-secret}
+      ADMIN_RESET_SECRET: ${ADMIN_RESET_SECRET:-}
+    volumes:
+      - atendente3_backend_data:/data
+    secrets:
+      - atendente3_openai_api_key
+    networks:
+      - internal
+    deploy:
+      replicas: 1
+
+  worker:
+    image: ${BACKEND_IMAGE:-ghcr.io/ilki70/sdr/backend:latest}
+    command: celery -A app.workers.celery_app.celery_app worker -l info -Q celery -c 1
+    environment:
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
+      OPENAI_API_KEY_FILE: /run/secrets/atendente3_openai_api_key
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://atendente3:atendente3@postgres:5432/atendente3}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_TASK_ALWAYS_EAGER: ${CELERY_TASK_ALWAYS_EAGER:-false}
       BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
       WHATSAPP_GATEWAY_BASE_URL: ${WHATSAPP_GATEWAY_BASE_URL:-http://whatsapp-gateway:8090}
       WHATSAPP_GATEWAY_SECRET: ${WHATSAPP_GATEWAY_SECRET:-replace-with-gateway-secret}
@@ -96,6 +132,7 @@ networks:
     external: true
 
 volumes:
+  sdr_redis_data:
   atendente3_backend_data:
   atendente3_postgres_data:
   atendente3_whatsapp_data:

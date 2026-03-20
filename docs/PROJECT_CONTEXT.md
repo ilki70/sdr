@@ -10,6 +10,7 @@ Plataforma interna de operacao comercial com agentes de IA, backend FastAPI, fro
 - Backend: FastAPI com auth, tenant context, migrations Alembic e stream SSE para mensagens.
 - Frontend: Next.js com iron-session, landing, login e modulos operacionais do MVP.
 - Infra local: Docker Compose com MySQL, Redis, Qdrant e Adminer.
+- Produção Swarm: stack `sdr` com `redis`, `postgres`, `backend`, `worker`, `frontend`, `db-admin` e `whatsapp-gateway`.
 - Fluxo principal: login por tenant, proxy autenticado frontend -> backend, laboratorio de agente para simulacao de conversas e central operacional interna.
 
 ## Current Priorities
@@ -19,6 +20,7 @@ Plataforma interna de operacao comercial com agentes de IA, backend FastAPI, fro
 - Manter o bootstrap local funcional enquanto a nova linha de produto evolui.
 - Manter um caminho administrativo de recuperacao de acesso para usuarios/tenants, sem expor reset publico irrestrito.
 - Garantir que o deploy `sdr` siga bootstrapando migrations no backend e use `sdr_backend` como alias interno no Swarm.
+- Garantir que o deploy `sdr` tenha um worker Celery consumindo a fila de knowledge/quality via Redis, para evitar jobs eternamente em `queued`.
 
 ## Key References
 - Main overview: `/home/ilki/sdr/README.md`
