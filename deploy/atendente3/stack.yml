@@ -14,14 +14,13 @@ services:
 
   backend:
     image: ${BACKEND_IMAGE:-ghcr.io/ilki70/sdr/backend:latest}
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     environment:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
       OPENAI_API_KEY_FILE: /run/secrets/atendente3_openai_api_key
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://atendente3:atendente3@postgres:5432/atendente3}
-      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://sdr_backend:8000}
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
       WHATSAPP_GATEWAY_BASE_URL: ${WHATSAPP_GATEWAY_BASE_URL:-http://whatsapp-gateway:8090}
       WHATSAPP_GATEWAY_SECRET: ${WHATSAPP_GATEWAY_SECRET:-replace-with-gateway-secret}
       ADMIN_RESET_SECRET: ${ADMIN_RESET_SECRET:-}
@@ -38,7 +37,7 @@ services:
     image: ${FRONTEND_IMAGE:-ghcr.io/ilki70/sdr/frontend:latest}
     environment:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://pulse.orfi.com.br}
-      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://sdr_backend:8000}
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
       SESSION_SECRET: ${SESSION_SECRET:-replace-with-32-plus-chars}
     networks:
       - internal

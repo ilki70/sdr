@@ -91,6 +91,34 @@ function badgeTone(status: string): string {
   return "border-white/10 text-white/60";
 }
 
+function formatSourceType(sourceType: string): string {
+  const labels: Record<string, string> = {
+    youtube_video: "YouTube",
+    web_page: "Pagina web",
+    pdf: "PDF",
+    docx: "DOCX",
+    text: "Texto",
+    pending_upload: "Upload pendente",
+    playbook_note: "Nota interna",
+    vinac_playbook: "Playbook VINAC",
+  };
+  return labels[sourceType] || sourceType;
+}
+
+function sourceTypeHint(sourceType: string): string | null {
+  if (sourceType === "youtube_video") {
+    return "Transcript entra quando a legenda publica estiver disponivel.";
+  }
+  return null;
+}
+
+function sourceTypeAddon(sourceType: string): string | null {
+  if (sourceType === "youtube_video") {
+    return "Transcript";
+  }
+  return null;
+}
+
 export default function KnowledgePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProductId, setSelectedProductId] = useState("");
@@ -418,6 +446,9 @@ export default function KnowledgePage() {
                 {isRunningSegmentEvaluation ? "Enfileirando..." : "Executar laboratório do segmento"}
               </button>
             </div>
+            <div className="inline-flex rounded-full border border-white/10 bg-black/20 px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/60">
+              YouTube com transcript quando houver legenda publica
+            </div>
           </div>
 
           <div className="rounded-[28px] border border-white/10 bg-black/20 p-5">
@@ -466,6 +497,9 @@ export default function KnowledgePage() {
               placeholder="https://vinac.com.br/adesao/"
               className="mt-4 w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm outline-none focus:border-[var(--accent)]"
             />
+            <p className="mt-3 text-xs leading-6 text-white/55">
+              Aceita pagina web, PDF e YouTube. Em videos com legenda publica, o transcript entra na indexacao.
+            </p>
             <button
               type="submit"
               disabled={!selectedProductId || isSubmittingUrl || urlInput.trim().length === 0}
@@ -567,7 +601,14 @@ export default function KnowledgePage() {
                 <article key={`${item.source_id}-${item.score}`} className="rounded-[24px] border border-white/10 bg-black/20 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--accent)]">{item.source_type}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--accent)]">{formatSourceType(item.source_type)}</p>
+                        {sourceTypeAddon(item.source_type) ? (
+                          <span className="rounded-full border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--accent)]">
+                            {sourceTypeAddon(item.source_type)}
+                          </span>
+                        ) : null}
+                      </div>
                       <h3 className="mt-2 line-clamp-2 text-sm font-semibold">{item.source}</h3>
                     </div>
                     <div className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/60">
@@ -595,8 +636,13 @@ export default function KnowledgePage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-wide text-[var(--accent)]">
-                            {source.source_type}
+                            {formatSourceType(source.source_type)}
                           </span>
+                          {sourceTypeAddon(source.source_type) ? (
+                            <span className="rounded-full border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-3 py-1 text-[11px] uppercase tracking-wide text-[var(--accent)]">
+                              {sourceTypeAddon(source.source_type)}
+                            </span>
+                          ) : null}
                           <span className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-wide ${badgeTone(source.status)}`}>
                             {source.status}
                           </span>
@@ -605,6 +651,9 @@ export default function KnowledgePage() {
                           </span>
                         </div>
                         <p className="mt-3 break-all text-sm text-white/78">{source.source_ref}</p>
+                        {sourceTypeHint(source.source_type) ? (
+                          <p className="mt-2 text-xs leading-6 text-white/55">{sourceTypeHint(source.source_type)}</p>
+                        ) : null}
                       </div>
                       <div className="flex gap-2">
                         <button

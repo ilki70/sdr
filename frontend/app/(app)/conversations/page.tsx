@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { fetchJson } from "@/lib/api";
 import { formatDateTimeSP } from "@/lib/datetime";
+import { EmptyState } from "@/components/shared/empty-state";
 
 type Conversation = {
   id: string;
@@ -88,9 +89,12 @@ export default function ConversationsPage() {
           </article>
         ))}
         {!error && visibleConversations.length === 0 ? (
-          <article className="rounded-[24px] border border-dashed border-white/15 bg-black/20 p-5 text-sm text-white/60">
-            Nenhuma conversa encontrada para o filtro atual.
-          </article>
+          <EmptyState
+            title="Nenhuma conversa encontrada para o filtro atual."
+            description="Abra o Agent Lab ou ajuste o filtro de agente para ver conversas existentes."
+            actionLabel="Abrir Agent Lab"
+            actionHref="/agent-lab"
+          />
         ) : null}
       </div>
     </main>

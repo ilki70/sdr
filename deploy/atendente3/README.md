@@ -1,6 +1,6 @@
-# atendente3 deploy
+# sdr deploy
 
-Esta pasta versiona a definicao atual da stack `atendente3` observada em producao no Docker Swarm/Portainer.
+Esta pasta versiona a definicao historica da stack `atendente3`, hoje operando em producao como stack `sdr` no Docker Swarm/Portainer.
 
 ## O que foi alinhado
 
@@ -40,6 +40,7 @@ O workflow [`build-atendente3-images.yml`](/home/ilki/sdr/.github/workflows/buil
 - `ghcr.io/ilki70/sdr/whatsapp-gateway:latest`
 
 Para a VPS usar as imagens do GitHub, ajuste o `.env` da stack a partir de `.env.example`, principalmente `DATABASE_URL`, `SESSION_SECRET`, `WHATSAPP_GATEWAY_SECRET` e os hosts publicos do Pulse.
+Os nomes internos `atendente3_*` ainda aparecem em alguns recursos e variaveis por compatibilidade retroativa; o nome operacional da stack deve ser tratado como `sdr`.
 
 ## Contrato do canal WhatsApp
 
@@ -59,7 +60,7 @@ Para a VPS usar as imagens do GitHub, ajuste o `.env` da stack a partir de `.env
 4. Faça o deploy:
 
 ```bash
-docker stack deploy -c deploy/atendente3/stack.yml atendente3
+docker stack deploy -c deploy/atendente3/stack.yml sdr
 ```
 
 ## Proximo passo recomendado

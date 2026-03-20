@@ -1,20 +1,7 @@
 import Link from "next/link";
 import { BRAND_NAME } from "@/lib/brand";
-
-const navItems = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/consorcios", label: "Consorcios" },
-  { href: "/personas", label: "Personas" },
-  { href: "/agents", label: "Agents" },
-  { href: "/products", label: "Products" },
-  { href: "/knowledge", label: "Knowledge" },
-  { href: "/integrations", label: "Integrations" },
-  { href: "/agent-lab", label: "Agent Lab" },
-  { href: "/conversations", label: "Conversations" },
-  { href: "/quality", label: "Quality" },
-  { href: "/clients", label: "Clients" },
-  { href: "/commissions", label: "Commissions" },
-];
+import { CommandBar } from "@/components/layout/command-bar";
+import { SidebarNav } from "@/components/layout/sidebar-nav";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -31,15 +18,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </header>
       <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-6 px-6 py-6 lg:grid-cols-[220px_1fr]">
         <aside className="rounded-lg border border-white/10 bg-white/5 p-4">
-          <nav className="flex flex-col gap-2">
-            {navItems.map((item) => (
-              <Link key={item.href} href={item.href} className="rounded-md px-3 py-2 text-sm hover:bg-white/10">
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <SidebarNav />
         </aside>
-        <section>{children}</section>
+        <section className="space-y-6">
+          <CommandBar />
+          {children}
+        </section>
       </div>
     </div>
   );

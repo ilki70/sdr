@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { fetchJson } from "@/lib/api";
 import { formatDateTimeSP } from "@/lib/datetime";
+import { EmptyState } from "@/components/shared/empty-state";
 
 type Persona = {
   id: string;
@@ -152,17 +153,20 @@ export default function PersonasPage() {
       <div className="space-y-5">
         <form onSubmit={handleCreatePersona} className="rounded-[28px] border border-white/10 bg-white/5 p-5">
           <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--accent)]">Nova persona</p>
-          <input className="mt-4 w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={createForm.name} onChange={(event) => setCreateForm((previous) => ({ ...previous, name: event.target.value }))} />
-          <textarea className="mt-3 min-h-[90px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={createForm.description} onChange={(event) => setCreateForm((previous) => ({ ...previous, description: event.target.value }))} />
-          <input className="mt-3 w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={createForm.tone} onChange={(event) => setCreateForm((previous) => ({ ...previous, tone: event.target.value }))} />
-          <textarea className="mt-3 min-h-[140px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={createForm.prompt_system} onChange={(event) => setCreateForm((previous) => ({ ...previous, prompt_system: event.target.value }))} />
-          <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={createForm.approach_rules} onChange={(event) => setCreateForm((previous) => ({ ...previous, approach_rules: event.target.value }))} />
-          <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={createForm.objection_playbook} onChange={(event) => setCreateForm((previous) => ({ ...previous, objection_playbook: event.target.value }))} />
+          <input className="mt-4 w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm outline-none" value={createForm.name} onChange={(event) => setCreateForm((previous) => ({ ...previous, name: event.target.value }))} />
+          <textarea className="mt-3 min-h-[90px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm outline-none" value={createForm.description} onChange={(event) => setCreateForm((previous) => ({ ...previous, description: event.target.value }))} />
+          <input className="mt-3 w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm outline-none" value={createForm.tone} onChange={(event) => setCreateForm((previous) => ({ ...previous, tone: event.target.value }))} />
+          <textarea className="mt-3 min-h-[140px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm outline-none" value={createForm.prompt_system} onChange={(event) => setCreateForm((previous) => ({ ...previous, prompt_system: event.target.value }))} />
+          <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm outline-none" value={createForm.approach_rules} onChange={(event) => setCreateForm((previous) => ({ ...previous, approach_rules: event.target.value }))} />
+          <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm outline-none" value={createForm.objection_playbook} onChange={(event) => setCreateForm((previous) => ({ ...previous, objection_playbook: event.target.value }))} />
           <button className="mt-4 w-full rounded-full bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-black" type="submit">Criar persona publicada</button>
         </form>
 
         <section className="rounded-[28px] border border-white/10 bg-white/5 p-5">
-          <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Personas</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Personas</p>
+            <span className="rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-wide text-white/50">{personas.length} itens</span>
+          </div>
           <div className="mt-4 space-y-2">
             {personas.map((persona) => (
               <button key={persona.id} type="button" onClick={() => setSelectedPersonaId(persona.id)} className="block w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-left">
@@ -170,6 +174,12 @@ export default function PersonasPage() {
                 <p className="mt-1 text-xs text-white/50">Versão ativa: {persona.active_version_no || "-"}</p>
               </button>
             ))}
+            {personas.length === 0 ? (
+              <EmptyState
+                title="Nenhuma persona cadastrada."
+                description="Crie a primeira persona para registrar tom, objeções e estilo comercial do tenant."
+              />
+            ) : null}
           </div>
         </section>
       </div>
@@ -177,17 +187,20 @@ export default function PersonasPage() {
       <section className="space-y-5">
         {error ? <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</p> : null}
         <form onSubmit={handleCreateVersion} className="rounded-[28px] border border-white/10 bg-white/5 p-6">
-          <h1 className="text-2xl font-semibold">Painel de persona/playbook</h1>
+          <h1 className="text-2xl font-semibold">Painel de persona e playbook</h1>
           <p className="mt-2 text-sm text-white/70">Edite tom, prompt-base, regras comerciais e objeções sem tocar no código do agente.</p>
-          <input className="mt-4 w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={versionForm.tone} onChange={(event) => setVersionForm((previous) => ({ ...previous, tone: event.target.value }))} />
-          <textarea className="mt-3 min-h-[140px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={versionForm.prompt_system} onChange={(event) => setVersionForm((previous) => ({ ...previous, prompt_system: event.target.value }))} />
-          <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={versionForm.approach_rules} onChange={(event) => setVersionForm((previous) => ({ ...previous, approach_rules: event.target.value }))} />
-          <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm" value={versionForm.objection_playbook} onChange={(event) => setVersionForm((previous) => ({ ...previous, objection_playbook: event.target.value }))} />
+          <input className="mt-4 w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm outline-none" value={versionForm.tone} onChange={(event) => setVersionForm((previous) => ({ ...previous, tone: event.target.value }))} />
+          <textarea className="mt-3 min-h-[140px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm outline-none" value={versionForm.prompt_system} onChange={(event) => setVersionForm((previous) => ({ ...previous, prompt_system: event.target.value }))} />
+          <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm outline-none" value={versionForm.approach_rules} onChange={(event) => setVersionForm((previous) => ({ ...previous, approach_rules: event.target.value }))} />
+          <textarea className="mt-3 min-h-[120px] w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm outline-none" value={versionForm.objection_playbook} onChange={(event) => setVersionForm((previous) => ({ ...previous, objection_playbook: event.target.value }))} />
           <button className="mt-4 rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-black" type="submit">Criar nova versão</button>
         </form>
 
         <section className="rounded-[28px] border border-white/10 bg-white/5 p-6">
-          <h2 className="text-xl font-semibold">Versões</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold">Versões</h2>
+            <span className="rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-wide text-white/50">{detail?.versions.length || 0} itens</span>
+          </div>
           <div className="mt-5 space-y-3">
             {detail?.versions.map((version) => (
               <article key={version.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -202,6 +215,12 @@ export default function PersonasPage() {
                 <p className="mt-3 text-xs text-white/55">Regras: {(version.approach_rules_json.rules || []).join(" | ") || "sem regras"}</p>
               </article>
             ))}
+            {detail && detail.versions.length === 0 ? (
+              <EmptyState
+                title="Nenhuma versão publicada."
+                description="Publique a primeira versão para registrar o prompt de produção e o histórico do agente."
+              />
+            ) : null}
           </div>
         </section>
       </section>

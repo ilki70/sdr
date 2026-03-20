@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchJson } from "@/lib/api";
 import { SAO_PAULO_TIMEZONE } from "@/lib/datetime";
+import { EmptyState } from "@/components/shared/empty-state";
 
 type SessionPayload = {
   authenticated: boolean;
@@ -29,12 +30,22 @@ export default function SettingsPage() {
       <section className="grid gap-5 xl:grid-cols-2">
         <article className="rounded-[28px] border border-white/10 bg-black/20 p-6">
           <h2 className="text-xl font-semibold">Sessão</h2>
-          <dl className="mt-4 space-y-3 text-sm text-white/70">
-            <div><dt className="text-white/45">Usuário</dt><dd>{session?.fullName || "-"}</dd></div>
-            <div><dt className="text-white/45">Email</dt><dd>{session?.email || "-"}</dd></div>
-            <div><dt className="text-white/45">Tenant</dt><dd>{session?.tenantId || "-"}</dd></div>
-            <div><dt className="text-white/45">Role</dt><dd>{session?.role || "-"}</dd></div>
-          </dl>
+          {session ? (
+            <dl className="mt-4 space-y-3 text-sm text-white/70">
+              <div><dt className="text-white/45">Usuário</dt><dd>{session.fullName || "-"}</dd></div>
+              <div><dt className="text-white/45">Email</dt><dd>{session.email || "-"}</dd></div>
+              <div><dt className="text-white/45">Tenant</dt><dd>{session.tenantId || "-"}</dd></div>
+              <div><dt className="text-white/45">Role</dt><dd>{session.role || "-"}</dd></div>
+              <div><dt className="text-white/45">Autenticado</dt><dd>{session.authenticated ? "sim" : "nao"}</dd></div>
+            </dl>
+          ) : (
+            <EmptyState
+              title="Sessão indisponível."
+              description="Faça login novamente para carregar os detalhes do tenant e do usuário logado."
+              actionLabel="Ir para login"
+              actionHref="/login"
+            />
+          )}
         </article>
         <article className="rounded-[28px] border border-white/10 bg-black/20 p-6">
           <h2 className="text-xl font-semibold">Regionalização</h2>
@@ -42,6 +53,7 @@ export default function SettingsPage() {
             <div><dt className="text-white/45">Timezone padrão</dt><dd>{SAO_PAULO_TIMEZONE}</dd></div>
             <div><dt className="text-white/45">Locale</dt><dd>pt-BR</dd></div>
             <div><dt className="text-white/45">Status</dt><dd>Datas da UI renderizadas em horário de São Paulo.</dd></div>
+            <div><dt className="text-white/45">Escopo</dt><dd>Parâmetros locais para operação interna do SDR.</dd></div>
           </dl>
         </article>
       </section>

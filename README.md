@@ -1,121 +1,148 @@
-# Agente Vendedor
+# Orfi Pulse
 
-Projeto SaaS para operacao comercial com agentes de IA.
+Orfi Pulse e a plataforma interna de operacao comercial do `sdr`.
+Ela concentra configuracao de agentes, base de conhecimento, monitoria de conversas, integrações e apoio ao fechamento comercial.
 
-## Features
+O foco atual do produto e uso interno pela equipe, principalmente para operações de consorcio e fluxo comercial apoiado pela Turn2C.
 
-### 1) Scaffold backend FastAPI
-Descricao curta: backend inicial com healthcheck, configuracao por ambiente, logging JSON e rotas base de auth/tenant.
-Fluxo:
-1. Subir backend com Uvicorn.
-2. Chamar `GET /health` para validar disponibilidade.
-3. Chamar `GET /api/v1/auth/session` com `X-User-Id` e `X-Tenant-Id`.
+## O que o sistema faz
 
-### 2) Sessao segura no frontend com iron-session
-Descricao curta: login web salva sessao em cookie httpOnly e protege rotas operacionais.
-Fluxo:
-1. Abrir `/login` e informar email, senha e tenant.
-2. Frontend cria sessao em `/api/auth/login`.
-3. Middleware permite acesso a rotas como `/dashboard`.
+- Configura perfis de atendimento e comportamento de agentes.
+- Ingerir conhecimento por documentos, URLs, PDFs, DOCX, TXT e YouTube.
+- Acompanhar conversas e handoff humano em tempo real.
+- Operar canais e integrações de entrada.
+- Revisar qualidade das interações e apoiar melhoria contínua.
+- Organizar a operação comercial por produtos, personas e comissões.
 
-### 3) Proxy autenticado Next.js -> FastAPI
-Descricao curta: requests para backend passam por rota proxy que injeta `X-User-Id` e `X-Tenant-Id`.
-Fluxo:
-1. Frontend chama `/api/proxy/...`.
-2. Proxy valida sessao.
-3. Proxy encaminha para backend com headers de contexto.
+## Menu atual
 
-### 4) Shell de aplicacao e paginas MVP
-Descricao curta: estrutura inicial de landing + app logado com dashboard e modulos principais.
-Fluxo:
-1. Usuario acessa landing em `/`.
-2. Usuario autentica em `/login`.
-3. Usuario navega por dashboard, clientes, produtos, knowledge, personas, integracoes e comissoes.
+O painel publica os modulos:
 
-### 5) Migrations de banco com Alembic
-Descricao curta: cadeia de migrations para schema inicial, indexes de performance e triggers de comissao.
-Fluxo:
-1. Configurar `MYSQL_URL` no backend.
-2. Executar `alembic upgrade head`.
-3. Confirmar que revisao atual e `003_triggers`.
+- Dashboard
+- Agents
+- Consorcios
+- Clients
+- Products
+- Knowledge
+- Personas
+- Integrations
+- Conversations
+- Quality
+- Agent Lab
+- Commissions
 
-### 6) Backend core de dominio (clients, products, commissions)
-Descricao curta: endpoints protegidos com contexto de tenant para CRUD inicial e upload validado.
-Fluxo:
-1. Chamar `POST /api/v1/clients` para criar cliente.
-2. Chamar `POST /api/v1/products` para criar produto vinculado ao cliente.
-3. Chamar `POST /api/v1/products/{id}/assets/upload` para enviar arquivo (ate 20MB).
-4. Chamar `POST /api/v1/commissions/rules` para criar regra de comissao por tenant.
+## Fluxo recomendado de uso
 
-### 7) Agente inicial de mensagens (simulacao + SSE)
-Descricao curta: pipeline inicial do agente comercial com classificacao de intencao, contexto e resposta em stream.
-Fluxo:
-1. Chamar `POST /api/v1/messages/simulate` com `message_text`.
-2. Backend executa grafo inicial (`classify_intent -> retrieve_context -> compose_reply`).
-3. Chamar `POST /api/v1/messages/stream` para receber tokens SSE da resposta.
+1. Defina as `Personas` e o tom operacional.
+2. Configure os `Agents` com objetivo, limites e regras de handoff.
+3. Cadastre `Products` e a estrutura comercial associada.
+4. Alimente `Knowledge` com documentos, URLs e videos relevantes.
+5. Ajuste `Integrations` para os canais de entrada.
+6. Teste o comportamento no `Agent Lab`.
+7. Acompanhe o atendimento em `Conversations`.
+8. Revise respostas, risco e aderencia em `Quality`.
+9. Monitore desempenho e resultado em `Dashboard` e `Commissions`.
 
-### 8) Agent Lab (pagina de teste de conversacao)
-Descricao curta: tela interna para testar conversacao em tempo real antes da integracao com Chatwoot.
-Fluxo:
-1. Fazer login em `/login` com email, senha e tenant.
-2. Abrir `/agent-lab`.
-3. Enviar mensagens e acompanhar resposta do agente em stream.
+Para operações de consorcio, o atalho recomendado e entrar em `Consorcios` e trabalhar em cima de:
 
-### 9) Autenticacao real com tenant e role
-Descricao curta: login valida usuario, senha e acesso ao tenant no MySQL antes de criar sessao.
-Fluxo:
-1. Frontend envia credenciais para `/api/auth/login`.
-2. Backend valida email/senha e membership em `tenant_users`.
-3. Sessao iron-session armazena `userId`, `tenantId`, `role` e `email`.
+- `Playbook`
+- `Knowledge`
+- `Inbox`
 
-### 10) Registro de usuario de teste
-Descricao curta: cadastro para homologacao local com associacao de role no tenant.
-Fluxo:
-1. Abrir `/register`.
-2. Informar nome, email, senha, tenant (slug ou id) e role.
-3. Backend cria usuario e vinculo em `tenant_users`.
+## Login e multi-tenant
 
-### 11) Stack local quase producao
-Descricao curta: infraestrutura local com MySQL, Redis, Qdrant e Adminer via Docker Compose.
-Fluxo:
-1. Executar `docker compose up -d`.
-2. Rodar `backend/scripts/bootstrap_local.ps1` para migrations e seed.
-3. Iniciar backend (`uvicorn`) e frontend (`next dev`).
+O sistema usa autenticação por:
 
-## Testes profundos locais
-Pre-requisito:
-- Docker Desktop em execucao.
+- email
+- senha
+- `tenantId`
 
-1. Infra:
-- `docker compose up -d`
-2. Backend:
-- `cd backend`
-- `pip install -r requirements.txt`
-- `alembic upgrade head`
-- `python scripts/seed_deep_test_data.py`
-- `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`
-3. Frontend:
-- `cd frontend`
-- `npm install`
-- `npm run dev -- --hostname 127.0.0.1 --port 3000`
-4. Acesso:
-- login: `http://127.0.0.1:3000/login`
-- email seed: `admin@agentevendedor.example.com`
-- senha seed: `12345678`
-- tenant: `tenant-lab`
+O tenant de homologacao mais usado no ambiente atual e `tenant-lab`.
 
-Atalho PowerShell:
-- `.\scripts\start-local-tests.ps1`
+Fluxo comum:
 
-Se o MySQL local falhar na primeira inicializacao:
-- `.\scripts\reset-local-tests.ps1`
-- depois `.\scripts\start-local-tests.ps1`
+1. Acesse `https://pulse.orfi.com.br/login`.
+2. Entre com email, senha e tenant.
+3. Se for primeiro acesso em um tenant novo, use o cadastro.
 
-## Deploy versionado da stack atendente3
+## Recuperacao administrativa
 
-A definicao atual observada em producao para a stack `atendente3` foi versionada em [`deploy/atendente3/README.md`](/home/ilki/sdr/deploy/atendente3/README.md) com stack Swarm e `.env.example`.
+Existe um caminho administrativo para reset de senha de usuario interno.
+Ele e usado para suportar recuperacao de acesso sem expor um reset publico irrestrito.
 
-Estado atual:
-- o repositório agora descreve a stack implantada;
-- backend, frontend e `whatsapp-service` agora podem ser construidos/publicados pelo proprio repo;
-- o canal WhatsApp passa a ter um webhook versionado no backend e um serviço dedicado no repositório.
+Endpoint backend:
+
+- `POST /api/v1/auth/admin/reset-user-password`
+
+Proxy frontend:
+
+- `POST /api/auth/admin/reset-user-password`
+
+## RAG e base de conhecimento
+
+A base de conhecimento foi desenhada para suportar operacao interna com fontes variadas:
+
+- documentos internos
+- links oficiais
+- materiais de treinamento
+- videos do YouTube
+- textos de apoio comercial e compliance
+
+O objetivo e alimentar o agente com contexto suficiente para qualificar lead, responder objeções e encaminhar para humano quando necessario.
+
+## WhatsApp e atendimento
+
+O fluxo de WhatsApp da plataforma foi reimplementado com gateway proprio baseado em `whatsmeow`, QR pairing e sessao persistida.
+
+O frontend expoe a operacao e o backend concentra o processamento das mensagens e o handoff para a logica do agente.
+
+## Deploy
+
+O deploy de producao roda como stack `sdr` no Portainer.
+
+Pontos importantes do deploy atual:
+
+- o backend sobe com `alembic upgrade head` no boot
+- o alias interno do backend no Swarm e `sdr_backend`
+- os segredos esperados incluem `SESSION_SECRET`, `WHATSAPP_GATEWAY_SECRET` e `ADMIN_RESET_SECRET`
+
+## Desenvolvimento local
+
+Requisitos:
+
+- Docker
+- Node.js para o frontend
+- Python para o backend
+
+Comandos tipicos:
+
+```bash
+docker compose up -d
+cd backend && alembic upgrade head
+```
+
+Depois disso, suba backend e frontend conforme o seu ambiente local.
+
+## Estrutura do repositório
+
+- `backend/`: API FastAPI, auth, agentes, conhecimento e integrações.
+- `frontend/`: app Next.js, dashboard e modulos operacionais.
+- `deploy/`: stack e documentação de deploy.
+- `docs/`: contexto duravel, worklog e notas de evolucao do produto.
+
+## Status atual
+
+O `sdr` esta orientado para uso interno da equipe como plataforma operacional de SDR/closer assistido.
+A direção atual prioriza:
+
+- configuração de agente
+- RAG com conhecimento interno
+- acompanhamento de conversas
+- suporte a consorcios/Turn2C
+- handoff humano no momento certo
+
+## Observacoes
+
+- O projeto nao deve depender de defaults temporarios de ambiente.
+- O deploy precisa manter bootstrap de migrations no backend.
+- O acesso multi-tenant deve ser preservado entre frontend, backend e banco.

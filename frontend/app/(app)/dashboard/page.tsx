@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchJson } from "@/lib/api";
 import { formatDateTimeSP } from "@/lib/datetime";
+import { EmptyState } from "@/components/shared/empty-state";
 
 type DashboardJob = {
   id: string;
@@ -270,6 +271,14 @@ export default function DashboardPage() {
                 <p className="mt-2 text-xs text-white/35">Produto {job.product_id.slice(0, 8)}</p>
               </article>
             ))}
+            {data && data.recent_jobs.length === 0 ? (
+              <EmptyState
+                title="Nenhum job recente."
+                description="Assim que houver ingestao, avaliacao ou processamento de conversas, a fila aparece aqui."
+                actionLabel="Abrir Knowledge"
+                actionHref="/knowledge"
+              />
+            ) : null}
           </div>
         </div>
 
@@ -297,7 +306,12 @@ export default function DashboardPage() {
                 </article>
               ))}
               {data && data.agent_metrics.length === 0 ? (
-                <p className="text-sm text-white/60">Nenhum agente encontrado no tenant.</p>
+                <EmptyState
+                  title="Nenhum agente encontrado no tenant."
+                  description="Crie o primeiro agente em Agents para ver a saude operacional por perfil."
+                  actionLabel="Criar agente"
+                  actionHref="/agents"
+                />
               ) : null}
             </div>
           </section>
@@ -315,7 +329,12 @@ export default function DashboardPage() {
                 </p>
               </div>
             ) : (
-              <p className="mt-4 text-sm text-white/60">Nenhuma avaliacao automatica encontrada.</p>
+              <EmptyState
+                title="Nenhuma avaliacao automatica encontrada."
+                description="Execute o laboratório ou processe uma conversa real para gerar o primeiro resultado de quality."
+                actionLabel="Abrir Agent Lab"
+                actionHref="/agent-lab"
+              />
             )}
           </section>
 
@@ -331,6 +350,14 @@ export default function DashboardPage() {
                   <p className="mt-2 text-xs uppercase tracking-wide text-white/35">{conversation.message_count} mensagens</p>
                 </article>
               ))}
+              {data && data.recent_conversations.length === 0 ? (
+                <EmptyState
+                  title="Nenhuma conversa recente."
+                  description="O inbox ainda esta vazio. Depois do primeiro contato, as conversas aparecem aqui."
+                  actionLabel="Abrir Conversas"
+                  actionHref="/conversations"
+                />
+              ) : null}
             </div>
           </section>
         </div>

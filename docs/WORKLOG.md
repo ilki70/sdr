@@ -1,5 +1,62 @@
 # Worklog
 
+## 2026-03-20
+- Melhorada a tela de `Knowledge` no frontend para deixar a ingestao de YouTube mais legivel para o operador:
+  - badges de `source_type` agora aparecem com rótulos amigaveis
+  - a UI avisa que videos do YouTube entram com transcript quando a legenda publica estiver disponivel
+  - a tela de ingestao de URL tambem explica os formatos aceitos
+- Refinamento adicional na mesma tela:
+  - fontes `youtube_video` agora mostram um badge `Transcript` no inventario e nos resultados da busca
+  - isso deixa claro visualmente quais fontes vieram do YouTube e podem carregar transcricao
+- Validacao executada em workspace limpo em `/home/ilki/tmp/frontend-check`:
+  - `npm run typecheck` -> ok
+  - `npm run build` -> ok
+- Proximo passo recomendado:
+  - publicar o ajuste no branch principal e, se necessario, seguir para a tela de `Knowledge` com mais sinais de origem/transcript no inventario
+
+## 2026-03-20
+- Melhorado o `Dashboard` operacional do frontend:
+  - o `CommandBar` saiu do placeholder e virou um conjunto de atalhos para `Dashboard`, `Knowledge`, `Agent Lab` e `Quality`
+  - o layout interno agora exibe essa barra no topo das telas autenticadas
+  - o `Dashboard` ganhou estados vazios reutilizando `EmptyState` para jobs recentes, agentes sem dados, ultima avaliacao e conversas recentes
+- Validacao executada em workspace limpo em `/home/ilki/tmp/frontend-check`:
+  - `npm run typecheck` -> ok
+  - `npm run build` -> ok
+- Proximo passo recomendado:
+  - seguir o mesmo padrao de estados vazios e atalhos nas outras telas do app, especialmente `settings` e `conversations`
+
+## 2026-03-20
+- Continuacao do acabamento do frontend:
+  - `Conversations` agora usa `EmptyState` quando a lista filtrada fica vazia
+  - `Settings` ganhou `EmptyState` para o caso de sessao ausente e um campo extra de escopo operacional
+- Validacao executada em workspace limpo em `/home/ilki/tmp/frontend-check`:
+  - `npm run typecheck` -> ok
+  - `npm run build` -> ok
+- Proximo passo recomendado:
+  - passar o mesmo tratamento de estados vazios e linguagem operacional para telas restantes que ainda estejam muito espartanas
+
+## 2026-03-20
+- Padronizacao visual mais ampla do frontend:
+  - criado `SidebarNav` com estado ativo real baseado na rota atual
+  - o layout autenticado passou a usar esse sidebar em vez do nav estatico
+  - `Clients`, `Products`, `Sales` e `Commissions` ganharam cabeçalhos mais descritivos e `EmptyState` nos casos sem dados
+- Validacao executada em workspace limpo em `/home/ilki/tmp/frontend-check`:
+  - `npm run typecheck` -> ok
+  - `npm run build` -> ok
+- Proximo passo recomendado:
+  - repetir o mesmo nivel de acabamento nas telas de `Agents` e `Personas`, que ainda sao as mais densas do app
+
+## 2026-03-20
+- Ultimo bloco de padronizacao do frontend nesta rodada:
+  - `Personas` recebeu cabeçalho mais claro, contadores de itens e `EmptyState` para listas vazias
+  - o copy das telas foi uniformizado para usar linguagem operacional mais consistente
+- `Agents` tambem foi trazido para o mesmo padrao apos corrigir a ownership do arquivo e aplicar a versao validada
+- Validacao executada em workspace limpo em `/home/ilki/tmp/frontend-check`:
+  - `npm run typecheck` -> ok
+  - `npm run build` -> ok
+- Proximo passo recomendado:
+  - seguir daqui apenas com ajustes funcionais ou uma ultima passada de polish se algum fluxo ainda soar inconsistente
+
 ## 2026-03-19
 - Implementada a ingestao de transcricao de videos YouTube na base de conhecimento:
   - o backend agora extrai transcript quando disponivel e inclui esse texto no `content` indexado para RAG
