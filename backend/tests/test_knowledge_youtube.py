@@ -12,6 +12,11 @@ def test_extract_youtube_video_id_supports_common_formats() -> None:
     assert knowledge._extract_youtube_video_id("https://www.youtube.com/embed/jkl012MNO") == "jkl012MNO"
 
 
+def test_normalize_source_ref_adds_scheme_for_youtube_urls() -> None:
+    assert knowledge._normalize_source_ref("www.youtube.com/watch?v=abc123XYZ") == "https://www.youtube.com/watch?v=abc123XYZ"
+    assert knowledge._normalize_source_ref("youtube.com/watch?v=abc123XYZ") == "https://youtube.com/watch?v=abc123XYZ"
+
+
 def test_extract_youtube_text_prefers_transcript_when_available(monkeypatch) -> None:
     class FakeResponse:
         def raise_for_status(self) -> None:
@@ -50,4 +55,3 @@ def test_extract_youtube_text_prefers_transcript_when_available(monkeypatch) -> 
     assert extracted.title == "Titulo do video"
     assert extracted.summary == "Primeira frase Segunda frase"
     assert "TRANSCRICAO: Primeira frase Segunda frase" in extracted.content
-

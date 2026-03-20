@@ -177,6 +177,16 @@ def _extract_youtube_video_id(source_ref: str) -> str | None:
     return None
 
 
+def _normalize_source_ref(source_ref: str) -> str:
+    normalized = source_ref.strip()
+    parsed = urlparse(normalized)
+    if parsed.scheme:
+        return normalized
+    if normalized.startswith(("www.", "youtube.com", "youtu.be", "m.youtube.com", "music.youtube.com")):
+        return f"https://{normalized}"
+    return normalized
+
+
 async def _extract_youtube_transcript(video_id: str | None) -> str | None:
     if not video_id or YouTubeTranscriptApi is None:
         return None
@@ -260,6 +270,7 @@ async def extract_source_from_url(source_ref: str) -> ExtractedSource:
 
 
 async def extract_source_from_ref(source_ref: str) -> ExtractedSource:
+    source_ref = _normalize_source_ref(source_ref)
     parsed = urlparse(source_ref)
     if parsed.scheme in {"http", "https"}:
         return await extract_source_from_url(source_ref)

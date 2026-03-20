@@ -119,6 +119,26 @@ function sourceTypeAddon(sourceType: string): string | null {
   return null;
 }
 
+function normalizeSourceRef(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) {
+    return trimmed;
+  }
+  if (
+    trimmed.startsWith("www.") ||
+    trimmed.startsWith("youtube.com") ||
+    trimmed.startsWith("youtu.be") ||
+    trimmed.startsWith("m.youtube.com") ||
+    trimmed.startsWith("music.youtube.com")
+  ) {
+    return `https://${trimmed}`;
+  }
+  return trimmed;
+}
+
 export default function KnowledgePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProductId, setSelectedProductId] = useState("");
@@ -225,13 +245,14 @@ export default function KnowledgePage() {
     if (!selectedProductId || !urlInput.trim()) {
       return;
     }
+    const normalizedSourceRef = normalizeSourceRef(urlInput);
     setIsSubmittingUrl(true);
     setError(null);
     setNotice(null);
     try {
       await fetchJson<KnowledgeJob>("/api/proxy/knowledge/jobs/url", {
         method: "POST",
-        body: JSON.stringify({ product_id: selectedProductId, source_ref: urlInput.trim() }),
+        body: JSON.stringify({ product_id: selectedProductId, source_ref: normalizedSourceRef }),
       });
       await refreshKnowledgeState(selectedProductId);
       setUrlInput("");
@@ -300,9 +321,9 @@ export default function KnowledgePage() {
         body: JSON.stringify({ product_id: selectedProductId }),
       });
       await refreshKnowledgeState(selectedProductId);
-      setNotice("Base oficial enviada para ingestao.");
+      setNotice("Base oficial da VINAC enviada para ingestao.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Falha ao enfileirar base oficial.");
+      setError(cause instanceof Error ? cause.message : "Falha ao enfileirar base VINAC.");
     } finally {
       setIsSeedingVinac(false);
     }
@@ -378,9 +399,9 @@ export default function KnowledgePage() {
         body: JSON.stringify({ product_id: selectedProductId }),
       });
       await refreshKnowledgeState(selectedProductId);
-      setNotice("Laboratorio de consorcios enfileirado.");
+      setNotice("Laboratorio VINAC enfileirado.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Falha ao iniciar laboratorio de consorcios.");
+      setError(cause instanceof Error ? cause.message : "Falha ao iniciar laboratorio VINAC.");
     } finally {
       setIsRunningEvaluation(false);
     }
@@ -414,10 +435,10 @@ export default function KnowledgePage() {
           <div className="space-y-4">
             <p className="text-[11px] uppercase tracking-[0.26em] text-[var(--accent)]">Knowledge Ops</p>
             <div>
-              <h1 className="text-3xl font-semibold">RAG operacional e laboratório de consórcios</h1>
+              <h1 className="text-3xl font-semibold">RAG operacional e laboratório VINAC</h1>
               <p className="mt-2 max-w-2xl text-sm text-white/70">
                 Ingestao assíncrona, versionamento de fontes, diff entre versões e avaliação automatizada do agente com
-                cenários de venda do playbook ativo.
+                cenários de venda da VINAC.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -427,7 +448,7 @@ export default function KnowledgePage() {
                 disabled={!selectedProductId || isSeedingVinac}
                 className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-black disabled:opacity-60"
               >
-                {isSeedingVinac ? "Enfileirando..." : "Ingerir base oficial"}
+                {isSeedingVinac ? "Enfileirando..." : "Ingerir base oficial VINAC"}
               </button>
               <button
                 type="button"
@@ -435,7 +456,7 @@ export default function KnowledgePage() {
                 disabled={!selectedProductId || isRunningEvaluation}
                 className="rounded-full border border-[var(--accent)]/40 px-4 py-2 text-sm text-[var(--accent)] disabled:opacity-60"
               >
-                {isRunningEvaluation ? "Enfileirando lab..." : "Executar laboratório"}
+                {isRunningEvaluation ? "Enfileirando lab..." : "Executar laboratório VINAC"}
               </button>
               <button
                 type="button"
@@ -478,7 +499,7 @@ export default function KnowledgePage() {
               </p>
             ) : null}
             <p className="mt-4 text-sm text-white/70">
-              Caso de laboratório: <a href="https://www.turn2c.com/aplicativo/b2b" target="_blank" rel="noreferrer" className="text-[var(--accent)]">Turn2C</a>
+              Caso de laboratório: <a href="https://vinac.com.br/" target="_blank" rel="noreferrer" className="text-[var(--accent)]">vinac.com.br</a>
             </p>
           </div>
         </div>
@@ -498,7 +519,8 @@ export default function KnowledgePage() {
               className="mt-4 w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm outline-none focus:border-[var(--accent)]"
             />
             <p className="mt-3 text-xs leading-6 text-white/55">
-              Aceita pagina web, PDF e YouTube. Em videos com legenda publica, o transcript entra na indexacao.
+              Aceita pagina web, PDF e YouTube. Se colar sem `https://`, o sistema completa automaticamente.
+              Em videos com legenda publica, o transcript entra na indexacao.
             </p>
             <button
               type="submit"
@@ -711,7 +733,7 @@ export default function KnowledgePage() {
               </section>
 
               <section className="rounded-[30px] border border-white/10 bg-white/5 p-6">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Laboratório de consórcios</p>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-white/45">Laboratório VINAC</p>
                 <div className="mt-4 rounded-[24px] border border-white/10 bg-black/20 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <strong className="text-sm">Última execução</strong>

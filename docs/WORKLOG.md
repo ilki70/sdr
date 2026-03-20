@@ -1,6 +1,30 @@
 # Worklog
 
 ## 2026-03-20
+- Corrigido o fluxo de ingestao de URL no `Knowledge` para aceitar links de YouTube colados sem `https://`:
+  - o backend agora normaliza `www.youtube.com/...`, `youtube.com/...` e `youtu.be/...` para URL completa antes de resolver a fonte
+  - o frontend tambem passa a completar o esquema automaticamente e avisa isso na UI
+  - isso evita a queda para o caminho de arquivo local, que fazia a acao parecer ignorada quando o usuario colava apenas o link cru
+- Validacao executada:
+  - `cd backend && python3 -m pytest -q tests/test_knowledge_youtube.py` -> `3 passed`
+  - `cd frontend && npx tsc --noEmit --incremental false` -> ok
+  - `npm run build` em workspace limpo -> ok
+- Proximo passo recomendado:
+  - publicar o commit e reaplicar a stack `sdr` no Portainer para puxar o frontend e o backend corrigidos
+
+## 2026-03-20
+- Publicada a release `v0.2.0` no GitHub para consolidar a rodada de frontend e knowledge:
+  - `main` foi empurrado com o commit `161446b`
+  - a release foi criada a partir da tag `v0.2.0`
+  - o GitHub Actions do repositório concluiu com `success` para esse commit
+- Redeploy da stack `sdr` concluido no Portainer:
+  - stack `35` / endpoint `1` reaplicada com `PullImage=true`
+  - `frontend`, `backend` e `whatsapp-gateway` receberam novos digests do GHCR
+  - smoke publico validado em `https://pulse.orfi.com.br/`, `https://pulse.orfi.com.br/health` e `https://pulse.orfi.com.br/api/auth/providers`
+- Proximo passo recomendado:
+  - acompanhar o proximo ciclo funcional no `pulse.orfi.com.br` e validar o comportamento real do fluxo de knowledge/WhatsApp sobre os novos containers
+
+## 2026-03-20
 - Melhorada a tela de `Knowledge` no frontend para deixar a ingestao de YouTube mais legivel para o operador:
   - badges de `source_type` agora aparecem com rótulos amigaveis
   - a UI avisa que videos do YouTube entram com transcript quando a legenda publica estiver disponivel
