@@ -1,6 +1,15 @@
 # Worklog
 
 ## 2026-03-20
+- Fechei o ciclo de publicacao do `sdr`:
+  - commit, push, release `v0.2.3` e redeploy da stack `sdr` concluidos
+  - o Portainer ficou alinhado ao `deploy/sdr/stack.yml` do repositorio
+  - o workflow de build de imagens terminou com `success`
+  - smoke publico passou em `/health` e `/api/auth/providers`
+- Proximo passo recomendado:
+  - acompanhar o proximo ciclo funcional em producao e usar a stack versionada como fonte de verdade para novos redeploys
+
+## 2026-03-20
 - Preparei o release candidate do `sdr` para commit/push/release/redeploy:
   - estabilizei as mudancas de autenticação, contexto multimodal, WhatsApp, knowledge, dashboard e deploy da stack
   - a validacao local passou com `PYTHONPYCACHEPREFIX=/tmp/sdr-pyc python3 -m compileall -q app tests`
