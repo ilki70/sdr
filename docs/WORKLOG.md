@@ -775,7 +775,8 @@
 - A nova experiencia de `Conversations` esta publicada em producao.
 - O funil operacional por conversa agora existe no schema e no backend de producao.
 - A stack `sdr` esta saudavel depois da correcao manual de migration.
+- O release `v0.2.7` foi criado no GitHub a partir do estado publicado em `main`.
 
 ## Next Recommended Step
-- Criar o release correspondente a esse rollout para registrar oficialmente a entrega.
 - Em uma passada futura, reforcar no bootstrap/deploy um check explicito de schema para reduzir o risco de drift apos rollouts.
+- Quando houver nova rodada de deploy com alteracao de schema, validar rollout + revisao Alembic como parte do checklist operacional.
