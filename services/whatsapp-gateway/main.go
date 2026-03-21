@@ -82,6 +82,7 @@ type Manager struct {
 	client     *whatsmeow.Client
 	config     GatewayConfig
 	status     SessionStatus
+	reconnecting bool
 	dataDir    string
 	configPath string
 	secret     string
@@ -164,6 +165,7 @@ func NewManager(dataDir string, gatewaySecret string) (*Manager, error) {
 		manager.status.PairedPhone = client.Store.ID.User
 		manager.status.SessionStatus = "stored_session"
 	}
+	go manager.maybeRestoreStoredSession("startup")
 	return manager, nil
 }
 
@@ -203,6 +205,43 @@ func (m *Manager) snapshotConfig() GatewayConfig {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.config
+}
+
+func (m *Manager) maybeRestoreStoredSession(trigger string) {
+	if m.client == nil || m.client.Store == nil || m.client.Store.ID == nil {
+		return
+	}
+	if m.snapshotConfig().CallbackURL == "" {
+		return
+	}
+
+	m.mu.Lock()
+	if m.reconnecting {
+		m.mu.Unlock()
+		return
+	}
+	status := m.status
+	if status.Connected || status.SessionStatus == "connecting" || status.SessionStatus == "pairing" || status.SessionStatus == "logged_out" {
+		m.mu.Unlock()
+		return
+	}
+	m.reconnecting = true
+	m.status.SessionStatus = "connecting"
+	m.status.LastEvent = "auto_reconnect_" + trigger
+	m.status.LastError = ""
+	m.status.UpdatedAt = time.Now().UTC()
+	m.mu.Unlock()
+
+	if err := m.client.Connect(); err != nil {
+		m.mu.Lock()
+		m.reconnecting = false
+		m.status.SessionStatus = "error"
+		m.status.LastError = err.Error()
+		m.status.UpdatedAt = time.Now().UTC()
+		m.mu.Unlock()
+		log.Printf("stored session reconnect failed trigger=%s err=%v", trigger, err)
+		return
+	}
 }
 
 func (m *Manager) requireSecret(next http.Handler) http.Handler {
@@ -270,21 +309,23 @@ func (m *Manager) handleConnect(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		go m.consumeQR(qrChan)
-	}
-
-	m.updateStatus(func(status *SessionStatus) {
-		status.SessionStatus = "connecting"
-		status.LastError = ""
-	})
-
-	if err := m.client.Connect(); err != nil {
 		m.updateStatus(func(status *SessionStatus) {
-			status.SessionStatus = "error"
-			status.LastError = err.Error()
+			status.SessionStatus = "connecting"
+			status.LastError = ""
 		})
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		if err := m.client.Connect(); err != nil {
+			m.updateStatus(func(status *SessionStatus) {
+				status.SessionStatus = "error"
+				status.LastError = err.Error()
+			})
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, m.snapshotStatus())
 		return
 	}
+
+	go m.maybeRestoreStoredSession("manual")
 	writeJSON(w, http.StatusOK, m.snapshotStatus())
 }
 
@@ -306,6 +347,7 @@ func (m *Manager) handleStatus(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"message": "method not allowed"})
 		return
 	}
+	go m.maybeRestoreStoredSession("status")
 	writeJSON(w, http.StatusOK, m.snapshotStatus())
 }
 
@@ -354,6 +396,7 @@ func (m *Manager) handleEvent(raw interface{}) {
 			pairedPhone = m.client.Store.ID.User
 		}
 		m.updateStatus(func(status *SessionStatus) {
+			m.reconnecting = false
 			status.Connected = true
 			status.SessionStatus = "connected"
 			status.PairedPhone = pairedPhone
@@ -364,9 +407,50 @@ func (m *Manager) handleEvent(raw interface{}) {
 		})
 	case *events.LoggedOut:
 		m.updateStatus(func(status *SessionStatus) {
+			m.reconnecting = false
 			status.Connected = false
 			status.SessionStatus = "logged_out"
 			status.LastEvent = "logged_out"
+		})
+	case *events.Disconnected:
+		m.updateStatus(func(status *SessionStatus) {
+			m.reconnecting = false
+			status.Connected = false
+			status.SessionStatus = "stored_session"
+			status.LastEvent = "disconnected"
+		})
+		go m.maybeRestoreStoredSession("disconnected")
+	case *events.StreamReplaced:
+		m.updateStatus(func(status *SessionStatus) {
+			m.reconnecting = false
+			status.Connected = false
+			status.SessionStatus = "stored_session"
+			status.LastEvent = "stream_replaced"
+		})
+	case *events.KeepAliveTimeout:
+		m.updateStatus(func(status *SessionStatus) {
+			m.reconnecting = false
+			status.Connected = false
+			status.SessionStatus = "stored_session"
+			status.LastEvent = "keepalive_timeout"
+			status.LastError = fmt.Sprintf("keepalive timeout count=%d", evt.ErrorCount)
+		})
+		go m.maybeRestoreStoredSession("keepalive_timeout")
+	case *events.ConnectFailure:
+		m.updateStatus(func(status *SessionStatus) {
+			m.reconnecting = false
+			status.Connected = false
+			status.SessionStatus = "error"
+			status.LastEvent = "connect_failure"
+			status.LastError = evt.Message
+		})
+	case *events.TemporaryBan:
+		m.updateStatus(func(status *SessionStatus) {
+			m.reconnecting = false
+			status.Connected = false
+			status.SessionStatus = "error"
+			status.LastEvent = "temporary_ban"
+			status.LastError = evt.Code.String()
 		})
 	case *events.Message:
 		if evt.Info.IsFromMe {
