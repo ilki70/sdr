@@ -753,3 +753,29 @@
 ## Next Recommended Step
 - Se quiser seguir no fluxo atual sem preview remoto, o proximo passo mais seguro e revisar o diff, ajustar detalhes finais da tabela e entao preparar commit.
 - Opcionalmente, corrigir o script de lint do frontend antes de consolidar o commit.
+
+## 2026-03-20
+- Publicado o bloco `feat: add conversations funnel crm workflow` no `main` e atualizado o deploy da stack `sdr`.
+- O workflow `Build atendente3 images` do commit `e5cdc8b` concluiu com sucesso e o Portainer reaplicou a stack com `PullImage=true`.
+- Logo apos o rollout, o dashboard quebrou porque o Postgres da producao ainda nao tinha a migration `007_conversation_pipeline_fields` aplicada.
+- Correcao executada em producao:
+  - `alembic upgrade head` rodado dentro do container `sdr_backend`
+  - revisao confirmada: `007_conversation_pipeline_fields`
+  - colunas confirmadas na tabela `conversations`: `pipeline_status`, `summary`, `next_step`
+- Validacao publica apos correcao:
+  - `https://pulse.orfi.com.br/` -> `200`
+  - `https://pulse.orfi.com.br/health` -> `200`
+  - `https://pulse.orfi.com.br/api/auth/providers` -> `200`
+- Digests ativos relevantes apos o rollout:
+  - backend: `ghcr.io/ilki70/sdr/backend:latest@sha256:e2ff8dcf7bed7056644cfd5fd52ce17ff8c38bbe6bbfdee90e96e8bc7c254a8d`
+  - frontend: `ghcr.io/ilki70/sdr/frontend:latest@sha256:e4012b019aa99585f4c7df4a74881644691d51f6ccdfb3295deae7cae131fc8b`
+  - whatsapp-gateway: `ghcr.io/ilki70/sdr/whatsapp-gateway:latest@sha256:81f237300ced9f8017a5aff686612e036f6c0bc628c007a68931e423f323e358`
+
+## Current Status
+- A nova experiencia de `Conversations` esta publicada em producao.
+- O funil operacional por conversa agora existe no schema e no backend de producao.
+- A stack `sdr` esta saudavel depois da correcao manual de migration.
+
+## Next Recommended Step
+- Criar o release correspondente a esse rollout para registrar oficialmente a entrega.
+- Em uma passada futura, reforcar no bootstrap/deploy um check explicito de schema para reduzir o risco de drift apos rollouts.

@@ -18,6 +18,7 @@ Plataforma interna de operacao comercial com agentes de IA, backend FastAPI, fro
 - Reposicionar o produto para uso interno da equipe em consorcios/Turn2C.
 - Preservar o contexto multi-tenant entre frontend, backend e banco.
 - Evoluir o frontend para configurar comportamento do agente, ingerir conhecimento e acompanhar atendimentos em tempo real.
+- Consolidar `Conversations` como inbox/CRM operacional com funil persistido por conversa.
 - Manter o bootstrap local funcional enquanto a nova linha de produto evolui.
 - Manter um caminho administrativo de recuperacao de acesso para usuarios/tenants, sem expor reset publico irrestrito.
 - Garantir que o deploy `sdr` siga bootstrapando migrations no backend e use `sdr_backend` como alias interno no Swarm.
@@ -39,4 +40,6 @@ Plataforma interna de operacao comercial com agentes de IA, backend FastAPI, fro
 - O contexto curto de conversa agora e cacheado em Redis por `conversation_id` para evitar repeticao de perguntas e preservar `imovel`, `valor`, `prazo` e `lance` entre turnos.
 - O fluxo de WhatsApp agora tambem leva `audio` e `image` para o backend via anexos, com transcricao/analisador multimodal quando houver arquivo disponivel.
 - O agente pode responder em fragmentos curtos para simular conversa mais humana no canal.
+- O schema de `Conversation` agora inclui `pipeline_status`, `summary` e `next_step`, usados pela tela de `Conversas` em formato CRM/inbox.
+- Em producao, ja houve um drift entre codigo e banco nesse bloco; depois de rollouts que mexam em schema, vale conferir a revisao Alembic aplicada no Postgres da stack `sdr`.
 - O clone legado em `/home/ilki/sdr` ficou com arquivos `root:root` dentro de `.git`; se for necessario reaproveita-lo, usar `GIT_OBJECT_DIRECTORY=/home/ilki/sdr/.git/objects-user` para gravar novos objetos.

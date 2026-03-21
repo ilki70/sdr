@@ -10,6 +10,7 @@ O foco atual do produto e uso interno pela equipe, principalmente para operaçõ
 - Configura perfis de atendimento e comportamento de agentes.
 - Ingerir conhecimento por documentos, URLs, PDFs, DOCX, TXT e YouTube.
 - Acompanhar conversas e handoff humano em tempo real.
+- Operar um funil comercial por conversa, com status, resumo e proximo passo persistidos.
 - Operar canais e integrações de entrada.
 - Revisar qualidade das interações e apoiar melhoria contínua.
 - Organizar a operação comercial por produtos, personas e comissões.
@@ -20,7 +21,6 @@ O painel publica os modulos:
 
 - Dashboard
 - Agents
-- Consorcios
 - Clients
 - Products
 - Knowledge
@@ -29,7 +29,9 @@ O painel publica os modulos:
 - Conversations
 - Quality
 - Agent Lab
+- Sales
 - Commissions
+- Settings
 
 ## Fluxo recomendado de uso
 
@@ -48,6 +50,24 @@ Para operações de consorcio, o atalho recomendado e entrar em `Consorcios` e t
 - `Playbook`
 - `Knowledge`
 - `Inbox`
+
+## Conversations
+
+O modulo `Conversations` agora funciona como uma central operacional de funil SDR:
+
+- tabela estilo CRM/inbox em dark mode
+- colunas de entrada, ultima interacao, lead, status, agente, proximo passo e resumo
+- filtros, busca, ordenacao e paginacao
+- painel lateral para leitura da conversa
+- acoes rapidas para `handoff`, `agendado`, `desqualificado` e retorno para `qualificacao`
+
+O backend persiste esses dados diretamente em `Conversation`:
+
+- `pipeline_status`
+- `summary`
+- `next_step`
+
+Isso permite acompanhar o estado comercial da conversa sem depender apenas de inferencia em tempo de leitura.
 
 ## Login e multi-tenant
 
@@ -106,6 +126,7 @@ Pontos importantes do deploy atual:
 - a stack inclui `redis` e um worker Celery dedicado para consumir a fila de `Knowledge` e `Quality`
 - o alias interno do backend no Swarm e `sdr_backend`
 - os segredos esperados incluem `SESSION_SECRET`, `WHATSAPP_GATEWAY_SECRET` e `ADMIN_RESET_SECRET`
+- quando o schema mudar, vale validar explicitamente a revisao Alembic publicada no Postgres da stack para evitar drift entre imagem e banco
 
 ## Desenvolvimento local
 
@@ -139,6 +160,7 @@ A direção atual prioriza:
 - configuração de agente
 - RAG com conhecimento interno
 - acompanhamento de conversas
+- funil operacional por conversa
 - suporte a consorcios/Turn2C
 - handoff humano no momento certo
 
