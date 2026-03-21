@@ -17,7 +17,7 @@ from app.services.conversation_context import (
     resolve_fragmented_inbound_text,
     store_cached_conversation_context,
 )
-from app.services.messages import list_recent_conversation_messages, save_message
+from app.services.messages import list_recent_conversation_messages, persist_conversation_pipeline_fields, save_message
 
 
 async def _get_integration_for_webhook(
@@ -156,6 +156,9 @@ async def _get_or_create_conversation(
         external_conversation_id=payload.external_conversation_id,
         channel="whatsapp",
         status="open",
+        pipeline_status="new",
+        summary="Lead entrou pelo WhatsApp e aguarda qualificacao inicial.",
+        next_step="Fazer primeira qualificacao e captar contexto basico do lead.",
     )
     db.add(conversation)
     await db.flush()
@@ -285,10 +288,14 @@ async def handle_inbound_whatsapp_message(
             "follow_up_suggestion": state.follow_up_suggestion,
         },
     )
-    await db.execute(
-        update(Conversation)
-        .where(Conversation.id == conversation.id)
-        .values(status="open", updated_at=utcnow_naive())
+    await persist_conversation_pipeline_fields(
+        db=db,
+        conversation_id=conversation.id,
+        tenant_id=integration.tenant_id,
+        pipeline_status="qualifying",
+        summary=effective_message_text[:160],
+        next_step=state.follow_up_suggestion or "Aprofundar necessidade e conduzir para o proximo passo.",
+        status="open",
     )
     await db.execute(
         update(Lead)

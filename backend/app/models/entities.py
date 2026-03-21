@@ -302,6 +302,9 @@ class Conversation(Base, TimestampMixin):
     external_conversation_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     channel: Mapped[str] = mapped_column(String(24), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="open")
+    pipeline_status: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
+    summary: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
+    next_step: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(), nullable=True)
 

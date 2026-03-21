@@ -1,6 +1,38 @@
 # Worklog
 
 ## 2026-03-20
+- Refatorei a tela `Conversations` do frontend para um formato de acompanhamento de leads mais proximo de CRM:
+  - a lista de cards foi substituida por tabela dark com filtros, busca, ordenacao e paginacao
+  - a grade ganhou colunas de `Status`, `Agente responsavel`, `Proximo passo` e `Resumo da conversa`
+  - o detalhe da conversa saiu de modal central e virou painel lateral estilo inbox operacional
+  - as acoes rapidas do painel (`handoff`, `agendado`, `desqualificar`, `voltar para qualificacao`) agora chamam backend real para persistir o estagio operacional
+- Ajustei o backend do modulo de mensagens para devolver novos campos derivados na listagem de conversas:
+  - `summary`
+  - `pipeline_status`
+  - `next_step`
+  - os valores sao inferidos a partir do estado da conversa, lifecycle do lead e metadata da ultima resposta do assistente
+- Backend de mensagens ganhou novo endpoint:
+  - `PATCH /api/v1/messages/conversations/{conversation_id}/pipeline-status`
+  - ele atualiza `Conversation.status` e `Lead.lifecycle_status` sem exigir migracao de schema nesta passada
+- O funil operacional deixou de ser apenas inferido e passou a ser modelado explicitamente em `Conversation`:
+  - nova migration `007_conversation_pipeline_fields`
+  - novos campos persistidos: `pipeline_status`, `summary` e `next_step`
+  - os fluxos de Agent Lab e WhatsApp agora gravam esses campos diretamente
+- Validacao executada:
+  - `python3.11 -m py_compile backend/app/models/entities.py backend/app/schemas/messages.py backend/app/services/messages.py backend/app/api/v1/messages/routes.py backend/app/services/whatsapp.py backend/app/services/whatsapp_gateway.py backend/alembic/versions/007_conversation_pipeline_fields.py` -> ok
+- Tentativa de aplicar migration local:
+  - o bloqueio inicial por falta de MySQL local foi resolvido depois da instalacao do MariaDB no host
+  - `python3.11 -m alembic upgrade head` aplicado com sucesso em `agente_vendedor`
+  - a revisao ativa agora e `007_conversation_pipeline_fields`
+  - a tabela `conversations` passou a ter `pipeline_status`, `summary` e `next_step`
+- Limitacao atual:
+  - o frontend local continua sem `node_modules`, entao a validacao por `tsc` ainda nao rodou neste workspace
+- Validacao adicional apos migracao:
+  - `DATABASE_URL=mysql+asyncmy://app:app@127.0.0.1:3306/agente_vendedor python3.11 -m pytest -q tests/test_messages_pipeline.py tests/test_whatsapp_gateway.py` -> `5 passed`
+- Proximo passo recomendado:
+  - popular conversas de desenvolvimento e validar a tela `Conversations` contra dados reais persistidos no MySQL local
+
+## 2026-03-20
 - Diagnostiquei uma falha de resposta no WhatsApp em producao:
   - o backend nao estava recebendo nenhum `POST /api/v1/whatsapp/inbound`
   - os logs do `whatsapp-gateway` mostravam falha de descriptografia/sincronizacao da sessao com `database is locked (SQLITE_BUSY)` logo apos autenticar
@@ -690,3 +722,34 @@
   - gerar o QR code
   - testar pareamento real do WhatsApp
   - checar se a auth esperada do frontend realmente mudou de contrato ou se `/api/auth/providers` regrediu e precisa de correcao
+
+## 2026-03-20
+- Refatorada a pagina de `Conversas` para uma tabela operacional estilo CRM/inbox em [`frontend/app/(app)/conversations/page.tsx`](/home/ilki/sdr/frontend/app/(app)/conversations/page.tsx):
+  - colunas de entrada, ultima interacao, nome/contato, status, agente responsavel, proximo passo, resumo e acao
+  - busca, filtros, ordenacao, paginacao e painel lateral no lugar do modal
+  - acoes rapidas do funil ligadas ao endpoint real de atualizacao de status
+- Persistido o funil como dado de primeira classe em `Conversation`:
+  - novos campos `pipeline_status`, `summary` e `next_step`
+  - migration criada em [`backend/alembic/versions/007_conversation_pipeline_fields.py`](/home/ilki/sdr/backend/alembic/versions/007_conversation_pipeline_fields.py)
+  - backend ajustado em `messages`, `whatsapp` e `whatsapp_gateway`
+- Validacao local concluida:
+  - MariaDB local instalado e banco `agente_vendedor` criado
+  - `alembic upgrade head` aplicado ate `007_conversation_pipeline_fields`
+  - testes `tests/test_messages_pipeline.py` e `tests/test_whatsapp_gateway.py` verdes
+- Criado seed idempotente para demo da nova tela:
+  - [`backend/scripts/seed_conversations_demo.py`](/home/ilki/sdr/backend/scripts/seed_conversations_demo.py)
+  - popula `tenant-lab` com 5 conversas e 10 mensagens distribuidas entre `new`, `qualifying`, `handoff`, `scheduled` e `disqualified`
+- Validacao de frontend concluida com toolchain local:
+  - `npm ci` em [`frontend`](/home/ilki/sdr/frontend) usando `Node v20.20.1` via `~/.nvm/versions/node/v20.20.1/bin`
+  - `npx tsc --noEmit --incremental false` passou
+  - `npm run lint` nao serviu como validacao porque o script atual `next lint` falha nesta base com `Invalid project directory provided`
+
+## Current Status
+- O backend local ja persiste o funil operacional no banco.
+- O banco MariaDB local tem dados reais suficientes para validar a nova tela de `Conversas`.
+- O frontend compila localmente; ainda nao houve validacao visual no navegador neste host, porque o ambiente nao oferece browser local.
+- O script de lint do frontend precisa ser revisto separadamente se a equipe quiser restaurar validacao ESLint local.
+
+## Next Recommended Step
+- Se quiser seguir no fluxo atual sem preview remoto, o proximo passo mais seguro e revisar o diff, ajustar detalhes finais da tabela e entao preparar commit.
+- Opcionalmente, corrigir o script de lint do frontend antes de consolidar o commit.

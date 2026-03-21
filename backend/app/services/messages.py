@@ -90,6 +90,9 @@ async def create_lab_conversation(
         integration_id=integration.id,
         channel=channel,
         status="open",
+        pipeline_status="new",
+        summary=f"Conversa iniciada no canal {channel}.",
+        next_step="Fazer primeira qualificacao e captar contexto basico do lead.",
     )
     db.add(conversation)
     await db.commit()
@@ -204,10 +207,18 @@ async def persist_conversation_exchange(
             "follow_up_suggestion": follow_up_suggestion,
         },
     )
+    pipeline_status = conversation.pipeline_status or "qualifying"
+    next_step = follow_up_suggestion or _derive_next_step(pipeline_status, None)
     await db.execute(
         update(Conversation)
         .where(Conversation.id == conversation.id)
-        .values(status="open", updated_at=func.now())
+        .values(
+            status="open",
+            pipeline_status=pipeline_status,
+            summary=_preview_text(user_text, max_length=160),
+            next_step=next_step,
+            updated_at=func.now(),
+        )
     )
     await db.execute(
         update(Lead)
@@ -217,6 +228,16 @@ async def persist_conversation_exchange(
     await db.commit()
 
 
+async def _get_lead_for_conversation(db: AsyncSession, conversation: Conversation) -> Lead:
+    result = await db.execute(
+        select(Lead).where(Lead.id == conversation.lead_id, Lead.tenant_id == conversation.tenant_id)
+    )
+    lead = result.scalar_one_or_none()
+    if not lead:
+        raise ValueError(f"Lead not found for conversation {conversation.id}")
+    return lead
+
+
 def _preview_text(content: str, max_length: int = 72) -> str:
     compact = " ".join(content.split())
     if len(compact) <= max_length:
@@ -224,9 +245,82 @@ def _preview_text(content: str, max_length: int = 72) -> str:
     return f"{compact[: max_length - 1]}…"
 
 
+def _derive_pipeline_status(conversation: Conversation, lead: Lead, latest_message: Message | None) -> str:
+    if conversation.pipeline_status:
+        return conversation.pipeline_status
+    status = (conversation.status or "").lower()
+    lifecycle = (lead.lifecycle_status or "").lower()
+    preview = (latest_message.content if latest_message else "").lower()
+
+    if status in {"waiting_human", "handoff"} or lifecycle in {"handoff", "waiting_human"}:
+        return "handoff"
+    if status == "closed" or lifecycle in {"lost", "disqualified", "invalid"}:
+        return "disqualified"
+    if "agend" in preview or "reuni" in preview or "visita" in preview:
+        return "scheduled"
+    if latest_message is None:
+        return "new"
+    return "qualifying"
+
+
+def _derive_summary(conversation: Conversation, lead: Lead, latest_message: Message | None) -> str | None:
+    if conversation.summary:
+        return conversation.summary
+    if latest_message and latest_message.content:
+        return _preview_text(latest_message.content, max_length=160)
+    if lead.name:
+        return f"Lead {lead.name} entrou pelo canal {conversation.channel} e ainda nao tem resumo operacional."
+    return f"Lead entrou pelo canal {conversation.channel} e ainda nao tem resumo operacional."
+
+
+def _derive_next_step(pipeline_status: str, latest_message: Message | None) -> str:
+    if latest_message and latest_message.metadata_json:
+        suggestion = latest_message.metadata_json.get("follow_up_suggestion")
+        if isinstance(suggestion, str) and suggestion.strip():
+            return suggestion.strip()
+
+    if pipeline_status == "handoff":
+        return "Assumir atendimento humano e revisar contexto da conversa."
+    if pipeline_status == "scheduled":
+        return "Confirmar horario, responsavel e preparar follow-up."
+    if pipeline_status == "disqualified":
+        return "Registrar motivo da perda e encerrar no funil."
+    if pipeline_status == "new":
+        return "Fazer primeira qualificacao e captar contexto basico do lead."
+    return "Aprofundar necessidade, objeções e conduzir para o proximo passo."
+
+
+async def persist_conversation_pipeline_fields(
+    db: AsyncSession,
+    conversation_id: str,
+    tenant_id: str,
+    *,
+    pipeline_status: str,
+    summary: str | None,
+    next_step: str | None,
+    status: str | None = None,
+    agent_id: str | None = None,
+) -> None:
+    values: dict[str, object] = {
+        "pipeline_status": pipeline_status,
+        "summary": summary,
+        "next_step": next_step,
+        "updated_at": func.now(),
+    }
+    if status is not None:
+        values["status"] = status
+    if agent_id is not None:
+        values["agent_id"] = agent_id
+    await db.execute(
+        update(Conversation)
+        .where(Conversation.id == conversation_id, Conversation.tenant_id == tenant_id)
+        .values(**values)
+    )
+
+
 async def list_conversations(db: AsyncSession, tenant_id: str) -> list[ConversationSummaryResponse]:
     conversations_result = await db.execute(
-        select(Conversation, Lead.name)
+        select(Conversation, Lead)
         .join(Lead, Lead.id == Conversation.lead_id)
         .where(Conversation.tenant_id == tenant_id)
         .order_by(Conversation.updated_at.desc(), Conversation.started_at.desc())
@@ -256,20 +350,21 @@ async def list_conversations(db: AsyncSession, tenant_id: str) -> list[Conversat
         ConversationSummaryResponse(
             id=conversation.id,
             agent_id=conversation.agent_id,
-            title=lead_name or f"Conversa {conversation.id[:8]}",
+            title=lead.name or lead.phone or lead.external_contact_id or f"Conversa {conversation.id[:8]}",
             channel=conversation.channel,
             status=conversation.status,
             lead_id=conversation.lead_id,
             started_at=conversation.started_at,
             updated_at=conversation.updated_at,
-            last_message_preview=(
-                _preview_text(latest_by_conversation[conversation.id].content)
-                if conversation.id in latest_by_conversation
-                else None
-            ),
+            last_message_preview=(_preview_text(latest_message.content) if latest_message else None),
+            summary=_derive_summary(conversation, lead, latest_message),
+            pipeline_status=conversation.pipeline_status or pipeline_status,
+            next_step=conversation.next_step or _derive_next_step(conversation.pipeline_status or pipeline_status, latest_message),
             message_count=int(count_map.get(conversation.id, 0)),
         )
-        for conversation, lead_name in rows
+        for conversation, lead in rows
+        for latest_message in [latest_by_conversation.get(conversation.id)]
+        for pipeline_status in [_derive_pipeline_status(conversation, lead, latest_message)]
     ]
 
 
@@ -300,3 +395,48 @@ async def get_conversation_detail(
             for message in messages
         ],
     )
+
+
+async def update_conversation_pipeline_status(
+    db: AsyncSession,
+    tenant_id: str,
+    conversation_id: str,
+    pipeline_status: str,
+) -> ConversationDetailResponse | None:
+    conversation = await get_conversation_or_none(db, tenant_id, conversation_id)
+    if not conversation:
+        return None
+    lead = await _get_lead_for_conversation(db, conversation)
+
+    conversation_status = "open"
+    lead_lifecycle_status = "engaged"
+    if pipeline_status == "handoff":
+        conversation_status = "waiting_human"
+        lead_lifecycle_status = "handoff"
+    elif pipeline_status == "scheduled":
+        conversation_status = "open"
+        lead_lifecycle_status = "scheduled"
+    elif pipeline_status == "disqualified":
+        conversation_status = "closed"
+        lead_lifecycle_status = "disqualified"
+    elif pipeline_status == "new":
+        conversation_status = "open"
+        lead_lifecycle_status = "new"
+
+    next_step = _derive_next_step(pipeline_status, None)
+    await persist_conversation_pipeline_fields(
+        db=db,
+        conversation_id=conversation.id,
+        tenant_id=tenant_id,
+        pipeline_status=pipeline_status,
+        summary=conversation.summary or _derive_summary(conversation, lead, None),
+        next_step=next_step,
+        status=conversation_status,
+    )
+    await db.execute(
+        update(Lead)
+        .where(Lead.id == conversation.lead_id, Lead.tenant_id == tenant_id)
+        .values(lifecycle_status=lead_lifecycle_status, updated_at=func.now())
+    )
+    await db.commit()
+    return await get_conversation_detail(db, tenant_id, conversation_id)

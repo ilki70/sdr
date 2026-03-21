@@ -27,7 +27,7 @@ from app.services.conversation_context import (
     store_cached_conversation_context,
 )
 from app.services.conversation_media import summarize_media_attachments
-from app.services.messages import list_recent_conversation_messages, save_message
+from app.services.messages import list_recent_conversation_messages, persist_conversation_pipeline_fields, save_message
 
 settings = get_settings()
 
@@ -263,6 +263,9 @@ async def _ensure_whatsapp_conversation(
         external_conversation_id=payload.chat_id,
         channel="whatsapp",
         status="open",
+        pipeline_status="new",
+        summary="Lead entrou pelo WhatsApp e aguarda qualificacao inicial.",
+        next_step="Fazer primeira qualificacao e captar contexto basico do lead.",
         started_at=utcnow_naive(),
     )
     db.add(conversation)
@@ -401,10 +404,15 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
             "follow_up_suggestion": state.follow_up_suggestion,
         },
     )
-    await db.execute(
-        update(Conversation)
-        .where(Conversation.id == conversation.id)
-        .values(status="open", updated_at=utcnow_naive(), agent_id=conversation.agent_id or integration.agent_id)
+    await persist_conversation_pipeline_fields(
+        db=db,
+        conversation_id=conversation.id,
+        tenant_id=payload.tenant_id,
+        pipeline_status="qualifying",
+        summary=effective_message_text[:160],
+        next_step=state.follow_up_suggestion or "Aprofundar necessidade e conduzir para o proximo passo.",
+        status="open",
+        agent_id=conversation.agent_id or integration.agent_id,
     )
     await db.execute(
         update(Lead)

@@ -13,6 +13,7 @@ from app.core.security import RequestContext, get_request_context
 from app.schemas.messages import (
     ConversationCreateRequest,
     ConversationDetailResponse,
+    ConversationPipelineStatusUpdateRequest,
     ConversationSummaryResponse,
     MessageSimulateRequest,
     MessageSimulateResponse,
@@ -26,6 +27,7 @@ from app.services.messages import (
     list_conversations,
     list_recent_conversation_messages,
     persist_conversation_exchange,
+    update_conversation_pipeline_status,
 )
 
 router = APIRouter(prefix="/messages", tags=["messages"])
@@ -102,6 +104,24 @@ async def get_conversation(
     db: AsyncSession = Depends(get_db_session),
 ) -> ConversationDetailResponse:
     detail = await get_conversation_detail(db, context.tenant_id, conversation_id)
+    if not detail:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    return detail
+
+
+@router.patch("/conversations/{conversation_id}/pipeline-status", response_model=ConversationDetailResponse)
+async def patch_conversation_pipeline_status(
+    conversation_id: str,
+    payload: ConversationPipelineStatusUpdateRequest,
+    context: RequestContext = Depends(get_request_context),
+    db: AsyncSession = Depends(get_db_session),
+) -> ConversationDetailResponse:
+    detail = await update_conversation_pipeline_status(
+        db=db,
+        tenant_id=context.tenant_id,
+        conversation_id=conversation_id,
+        pipeline_status=payload.pipeline_status,
+    )
     if not detail:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
     return detail

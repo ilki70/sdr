@@ -37,6 +37,10 @@ class ConversationCreateRequest(BaseModel):
     channel: str = Field(default="lab", max_length=24)
 
 
+class ConversationPipelineStatusUpdateRequest(BaseModel):
+    pipeline_status: Literal["new", "qualifying", "handoff", "scheduled", "disqualified"]
+
+
 class ConversationSummaryResponse(BaseModel):
     id: str
     agent_id: str | None = None
@@ -47,6 +51,9 @@ class ConversationSummaryResponse(BaseModel):
     started_at: datetime
     updated_at: datetime
     last_message_preview: str | None = None
+    summary: str | None = None
+    pipeline_status: str | None = None
+    next_step: str | None = None
     message_count: int = 0
 
 
