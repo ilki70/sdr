@@ -1,5 +1,40 @@
 # Worklog
 
+## 2026-03-22
+- Reestruturei as telas `Personas` e `Agents` para fluxo real de gestão:
+  - `Personas` agora permite criar, editar metadados, ativar/inativar, publicar nova versão e excluir a persona selecionada
+  - `Agents` agora permite criar, editar metadados, excluir, publicar nova versão e trocar explicitamente a persona vinculada em cada publicação
+  - a UI passou a mostrar o vínculo ativo `agente -> persona` e o histórico de versões com ação de republicação
+- Backend ampliado para sustentar o frontend:
+  - novo `PATCH /api/v1/personas/{persona_id}`
+  - novo `DELETE /api/v1/personas/{persona_id}`
+  - novo `DELETE /api/v1/agents/{agent_id}`
+  - criação/publicação de versão de agente agora valida se a persona existe, está ativa e tem versão publicada quando usada no vínculo
+  - exclusão segue soft delete; no caso de agentes, a API bloqueia remover o último agente ativo do tenant
+- Validação executada:
+- `python3 -m py_compile backend/app/api/v1/personas/routes.py backend/app/api/v1/agents/routes.py backend/app/services/personas.py backend/app/services/agents.py backend/app/schemas/personas.py` -> ok
+- `PATH=/home/ilki/.nvm/versions/node/v20.20.1/bin:$PATH npm ci --no-audit --no-fund` em `frontend` -> ok
+- `PATH=/home/ilki/.nvm/versions/node/v20.20.1/bin:$PATH npm run typecheck` em `frontend` -> ok
+- `PATH=/home/ilki/.nvm/versions/node/v20.20.1/bin:$PATH npm run build` em `frontend` -> ok
+- Smoke funcional local concluído pelo frontend autenticado/proxy:
+  - login em `api/auth/login` -> ok
+  - `POST/PATCH/DELETE` de personas via `api/proxy/personas` -> ok
+  - `POST/DELETE` de agents e `POST` de novas versões via `api/proxy/agents` -> ok
+  - troca de vinculação `agent -> persona` por nova versão publicada -> ok
+  - proteção de exclusão de persona ainda vinculada a agente ativo -> ok, retornando `400`
+  - após desvincular a persona em nova versão do agente, a exclusão da persona passou -> ok
+- Ajustes de ambiente para o smoke local:
+  - adicionei `.env` locais mínimos em `backend/` e `frontend/` para subir o fluxo local
+  - o host só oferece `python3.9`, então foi necessário adicionar `from __future__ import annotations` em módulos do backend com tipagem moderna e instalar `eval_type_backport` para o runtime local aceitar as anotações
+  - como o app completo ainda importa rotas fora do escopo com incompatibilidades adicionais nesse host, usei `app/smoke_main.py` para subir somente `auth`, `personas` e `agents` durante o smoke
+- Status atual:
+  - backend e telas principais ajustados para o CRUD pedido de personas e agentes
+  - vínculo de persona no agente ficou publicável e trocável a cada nova versão
+- Limitação atual do ambiente:
+  - o smoke visual por Playwright não rodou neste host porque faltam bibliotecas nativas de browser; a validação desta passada foi HTTP/end-to-end via frontend proxy e backend local
+- Próximo passo recomendado:
+  - fazer uma passada visual real em navegador no ambiente de homologação ou num host com dependências de Playwright/Chrome instaladas, e então seguir para rollout
+
 ## 2026-03-20
 - Refatorei a tela `Conversations` do frontend para um formato de acompanhamento de leads mais proximo de CRM:
   - a lista de cards foi substituida por tabela dark com filtros, busca, ordenacao e paginacao
@@ -780,3 +815,31 @@
 ## Next Recommended Step
 - Em uma passada futura, reforcar no bootstrap/deploy um check explicito de schema para reduzir o risco de drift apos rollouts.
 - Quando houver nova rodada de deploy com alteracao de schema, validar rollout + revisao Alembic como parte do checklist operacional.
+
+## 2026-03-21
+- Investigado o relato de que a sessao do WhatsApp "caia" apos inatividade.
+- Diagnostico encontrado no `whatsapp-gateway` em producao:
+  - o container estava com sessao persistida (`stored_session`) e numero pareado conhecido
+  - apos restart do processo, o gateway nao chamava `Connect()` sozinho; ele so reconectava quando alguem acionava manualmente `/api/v1/session/connect`
+  - por isso o frontend podia mostrar `Conectado: nao` mesmo com a sessao salva no SQLite
+- Correcao aplicada em [`services/whatsapp-gateway/main.go`](/home/ilki/sdr/services/whatsapp-gateway/main.go):
+  - reconexao automatica no boot quando existe sessao armazenada
+  - tentativa de autocura quando a UI consulta o status e encontra `stored_session` desconectado
+  - tratamento explicito de eventos `Disconnected`, `KeepAliveTimeout`, `ConnectFailure` e `TemporaryBan`
+  - preservado o fluxo manual de pareamento para sessao nova via QR code
+- Publicacao e deploy:
+  - commit `232d937 fix: auto reconnect stored whatsapp sessions` publicado em `main`
+  - workflow `Build atendente3 images` do commit `232d937` concluiu com `success`
+  - stack `sdr` reaplicada no Portainer com `PullImage=true`
+- Validacao em producao apos o rollout:
+  - `sdr_whatsapp-gateway` convergiu para `ghcr.io/ilki70/sdr/whatsapp-gateway:latest@sha256:6db3752cac001cc8d287200624cf973f2c1626d78ec0a04d32fb4bc0756fb6b5`
+  - o `session status` interno do gateway voltou para `connected=true` e `session_status=connected`
+  - smoke publico: `/`, `/health` e `/api/auth/providers` responderam `200`
+
+## Current Status
+- O gateway de WhatsApp volta a reconectar automaticamente quando existe sessao salva.
+- O status atual em producao voltou para `connected`.
+
+## Next Recommended Step
+- Confirmar com uma nova rodada de ociosidade real se a sessao permanece conectada sem intervencao manual.
+- Se o `last_error` voltar a aparecer apos mensagens reais, revisar separadamente o callback inbound do gateway.

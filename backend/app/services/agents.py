@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.entities import Agent, AgentVersion, BotPersona, PersonaVersion
@@ -160,18 +161,33 @@ async def _resolve_persona_version_no(
 ) -> int | None:
     if not persona_id:
         return None
-    if persona_version_no is not None:
-        return persona_version_no
 
     result = await db.execute(
         select(BotPersona).where(
             BotPersona.tenant_id == tenant_id,
             BotPersona.id == persona_id,
             BotPersona.deleted_at.is_(None),
+            BotPersona.is_active.is_(True),
         )
     )
     persona = result.scalar_one_or_none()
-    return persona.active_version_no if persona else None
+    if not persona:
+        raise ValueError("Persona not found")
+    if persona_version_no is not None:
+        version_result = await db.execute(
+            select(PersonaVersion).where(
+                PersonaVersion.tenant_id == tenant_id,
+                PersonaVersion.persona_id == persona_id,
+                PersonaVersion.version_no == persona_version_no,
+            )
+        )
+        version = version_result.scalar_one_or_none()
+        if not version:
+            raise ValueError("Persona version not found")
+        return version.version_no
+    if persona.active_version_no is None:
+        raise ValueError("Persona has no published version")
+    return persona.active_version_no
 
 
 async def _create_agent_version(
@@ -303,6 +319,17 @@ async def update_agent(db: AsyncSession, agent: Agent, payload: AgentUpdateReque
     return agent
 
 
+async def delete_agent(
+    db: AsyncSession,
+    agent: Agent,
+) -> Agent:
+    agent.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    agent.status = "archived"
+    await db.commit()
+    await db.refresh(agent)
+    return agent
+
+
 async def create_agent_version(
     db: AsyncSession,
     tenant_id: str,
@@ -371,6 +398,14 @@ async def get_default_agent_or_none(db: AsyncSession, tenant_id: str) -> Agent |
         .limit(1)
     )
     return result.scalar_one_or_none()
+
+
+async def count_active_agents(db: AsyncSession, tenant_id: str, exclude_agent_id: str | None = None) -> int:
+    conditions = [Agent.tenant_id == tenant_id, Agent.deleted_at.is_(None)]
+    if exclude_agent_id:
+        conditions.append(Agent.id != exclude_agent_id)
+    result = await db.execute(select(func.count()).select_from(Agent).where(*conditions))
+    return int(result.scalar_one())
 
 
 async def resolve_agent_for_conversation(

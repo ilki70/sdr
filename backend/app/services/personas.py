@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from datetime import datetime, timezone
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import uuid4
 
 from app.core.db import SessionLocal
-from app.models.entities import AgentVersion, BotPersona, PersonaVersion
-from app.schemas.personas import PersonaCreateRequest, PersonaVersionCreateRequest
+from app.models.entities import Agent, AgentVersion, BotPersona, PersonaVersion
+from app.schemas.personas import PersonaCreateRequest, PersonaUpdateRequest, PersonaVersionCreateRequest
 from app.services.agents import get_default_agent_or_none, get_persona_version_for_agent, get_published_agent_version_or_none
 
 
@@ -99,6 +101,23 @@ async def create_persona(
     return persona
 
 
+async def update_persona(
+    db: AsyncSession,
+    persona: BotPersona,
+    payload: PersonaUpdateRequest,
+) -> BotPersona:
+    changes = payload.model_dump(exclude_unset=True)
+    if "name" in changes and payload.name:
+        persona.name = payload.name
+    if "description" in changes:
+        persona.description = payload.description
+    if "is_active" in changes and payload.is_active is not None:
+        persona.is_active = payload.is_active
+    await db.commit()
+    await db.refresh(persona)
+    return persona
+
+
 async def create_persona_version(
     db: AsyncSession,
     tenant_id: str,
@@ -112,6 +131,36 @@ async def create_persona_version(
     await db.commit()
     await db.refresh(version)
     return version
+
+
+async def delete_persona(
+    db: AsyncSession,
+    persona: BotPersona,
+) -> BotPersona:
+    persona.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    persona.is_active = False
+    await db.commit()
+    await db.refresh(persona)
+    return persona
+
+
+async def count_agents_using_persona(db: AsyncSession, tenant_id: str, persona_id: str) -> int:
+    result = await db.execute(
+        select(func.count())
+        .select_from(AgentVersion)
+        .join(
+            Agent,
+            (Agent.id == AgentVersion.agent_id)
+            & (Agent.tenant_id == AgentVersion.tenant_id)
+            & (Agent.active_version_no == AgentVersion.version_no),
+        )
+        .where(
+            AgentVersion.tenant_id == tenant_id,
+            AgentVersion.persona_id == persona_id,
+            Agent.deleted_at.is_(None),
+        )
+    )
+    return int(result.scalar_one())
 
 
 async def publish_persona_version(

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -21,6 +23,12 @@ class PersonaVersionCreateRequest(BaseModel):
     approach_rules: list[str] = Field(default_factory=list)
     objection_playbook: dict[str, str] = Field(default_factory=dict)
     publish: bool = False
+
+
+class PersonaUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    description: str | None = None
+    is_active: bool | None = None
 
 
 class PersonaResponse(OrmModel):

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,8 +16,10 @@ from app.schemas.agents import (
     ConsorcioStudioUpdateRequest,
 )
 from app.services.agents import (
+    count_active_agents,
     create_agent,
     create_agent_version,
+    delete_agent,
     get_consorcio_studio_state,
     get_agent_or_none,
     list_agents,
@@ -43,7 +47,10 @@ async def post_agent(
     context: RequestContext = Depends(get_request_context),
     db: AsyncSession = Depends(get_db_session),
 ) -> AgentResponse:
-    agent = await create_agent(db, context.tenant_id, context.user_id, payload)
+    try:
+        agent = await create_agent(db, context.tenant_id, context.user_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return AgentResponse.model_validate(agent)
 
 
@@ -87,8 +94,30 @@ async def post_agent_version(
     agent = await get_agent_or_none(db, context.tenant_id, agent_id)
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
-    version = await create_agent_version(db, context.tenant_id, context.user_id, agent, payload)
+    try:
+        version = await create_agent_version(db, context.tenant_id, context.user_id, agent, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return AgentVersionResponse.model_validate(version)
+
+
+@router.delete("/{agent_id}", response_model=AgentResponse)
+async def delete_agent_route(
+    agent_id: str,
+    context: RequestContext = Depends(get_request_context),
+    db: AsyncSession = Depends(get_db_session),
+) -> AgentResponse:
+    agent = await get_agent_or_none(db, context.tenant_id, agent_id)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+    remaining = await count_active_agents(db, context.tenant_id, exclude_agent_id=agent.id)
+    if remaining == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Keep at least one active agent in the tenant",
+        )
+    deleted = await delete_agent(db, agent)
+    return AgentResponse.model_validate(deleted)
 
 
 @router.post("/{agent_id}/versions/{version_no}/publish", response_model=AgentVersionResponse)

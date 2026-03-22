@@ -40,40 +40,97 @@ type AgentDetail = {
   versions: AgentVersion[];
 };
 
+type Persona = {
+  id: string;
+  name: string;
+  active_version_no: number | null;
+  is_active: boolean;
+};
+
+type AgentEditorForm = {
+  name: string;
+  slug: string;
+  description: string;
+  status: string;
+};
+
+type AgentVersionForm = {
+  prompt_system: string;
+  persona_id: string;
+};
+
 const createTemplate = {
   name: "",
   slug: "",
   description: "",
   prompt_system:
     "Voce e um agente comercial configuravel. Atue com clareza, consistencia, foco no contexto oficial e sempre conduza para o proximo passo.",
+  persona_id: "",
 };
+
+function sanitizeSlug(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [personas, setPersonas] = useState<Persona[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   const [createForm, setCreateForm] = useState(createTemplate);
-  const [versionPrompt, setVersionPrompt] = useState(createTemplate.prompt_system);
+  const [editorForm, setEditorForm] = useState<AgentEditorForm>({
+    name: "",
+    slug: "",
+    description: "",
+    status: "active",
+  });
+  const [versionForm, setVersionForm] = useState<AgentVersionForm>({
+    prompt_system: createTemplate.prompt_system,
+    persona_id: "",
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [isSavingMeta, setIsSavingMeta] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    void loadAgents();
-  }, []);
+  async function loadAgentDetail(agentId: string) {
+    const payload = await fetchJson<AgentDetail>(`/api/proxy/agents/${agentId}`);
+    setDetail(payload);
+    const currentVersion = payload.versions[0];
+    setEditorForm({
+      name: payload.agent.name,
+      slug: payload.agent.slug,
+      description: payload.agent.description || "",
+      status: payload.agent.status,
+    });
+    setVersionForm({
+      prompt_system: currentVersion?.prompt_system || createTemplate.prompt_system,
+      persona_id: currentVersion?.persona_id || "",
+    });
+  }
 
-  async function loadAgents(preferredAgentId?: string) {
+  async function loadReferenceData(preferredAgentId?: string) {
     setIsLoading(true);
     setError(null);
     try {
-      const items = await fetchJson<Agent[]>("/api/proxy/agents");
-      setAgents(items);
-      const agentId = preferredAgentId || selectedAgentId || items[0]?.id || null;
-      setSelectedAgentId(agentId);
-      if (agentId) {
-        await loadAgentDetail(agentId);
+      const [agentItems, personaItems] = await Promise.all([
+        fetchJson<Agent[]>("/api/proxy/agents"),
+        fetchJson<Persona[]>("/api/proxy/personas"),
+      ]);
+      setAgents(agentItems);
+      setPersonas(personaItems);
+      const nextAgentId = preferredAgentId || selectedAgentId || agentItems[0]?.id || null;
+      setSelectedAgentId(nextAgentId);
+      if (nextAgentId) {
+        await loadAgentDetail(nextAgentId);
       } else {
         setDetail(null);
       }
@@ -84,11 +141,13 @@ export default function AgentsPage() {
     }
   }
 
-  async function loadAgentDetail(agentId: string) {
-    const payload = await fetchJson<AgentDetail>(`/api/proxy/agents/${agentId}`);
-    setDetail(payload);
-    setVersionPrompt(payload.versions[0]?.prompt_system || createTemplate.prompt_system);
-  }
+  useEffect(() => {
+    void loadReferenceData();
+  }, []);
+
+  const currentVersion = detail?.versions[0] || null;
+  const activePersonas = personas.filter((persona) => persona.is_active);
+  const linkedPersona = personas.find((persona) => persona.id === currentVersion?.persona_id) || null;
 
   async function handleCreateAgent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -99,7 +158,11 @@ export default function AgentsPage() {
       const created = await fetchJson<Agent>("/api/proxy/agents", {
         method: "POST",
         body: JSON.stringify({
-          ...createForm,
+          name: createForm.name,
+          slug: sanitizeSlug(createForm.slug),
+          description: createForm.description,
+          persona_id: createForm.persona_id || null,
+          prompt_system: createForm.prompt_system,
           policy_json: { rules: ["use contexto oficial", "nao invente fatos", "sempre proponha proximo passo"] },
           tool_config_json: { rag_enabled: true, web_allowlist_enabled: true },
           knowledge_config_json: { scope: "agent_only" },
@@ -109,11 +172,38 @@ export default function AgentsPage() {
       });
       setCreateForm(createTemplate);
       setNotice(`Agente ${created.name} criado e publicado.`);
-      await loadAgents(created.id);
+      await loadReferenceData(created.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Falha ao criar agente.");
     } finally {
       setIsCreating(false);
+    }
+  }
+
+  async function handleSaveAgentMeta(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!detail) {
+      return;
+    }
+    setIsSavingMeta(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await fetchJson<Agent>(`/api/proxy/agents/${detail.agent.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: editorForm.name,
+          slug: sanitizeSlug(editorForm.slug),
+          description: editorForm.description,
+          status: editorForm.status,
+        }),
+      });
+      setNotice(`Dados do agente ${editorForm.name} atualizados.`);
+      await loadReferenceData(detail.agent.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao atualizar agente.");
+    } finally {
+      setIsSavingMeta(false);
     }
   }
 
@@ -126,13 +216,11 @@ export default function AgentsPage() {
     setError(null);
     setNotice(null);
     try {
-      const currentVersion = detail.versions[0];
       await fetchJson<AgentVersion>(`/api/proxy/agents/${detail.agent.id}/versions`, {
         method: "POST",
         body: JSON.stringify({
-          prompt_system: versionPrompt,
-          persona_id: currentVersion?.persona_id || null,
-          persona_version_no: currentVersion?.persona_version_no || null,
+          prompt_system: versionForm.prompt_system,
+          persona_id: versionForm.persona_id || null,
           policy_json: currentVersion?.policy_json || {},
           tool_config_json: currentVersion?.tool_config_json || {},
           knowledge_config_json: currentVersion?.knowledge_config_json || {},
@@ -140,12 +228,57 @@ export default function AgentsPage() {
           publish: true,
         }),
       });
-      setNotice(`Nova versao publicada para ${detail.agent.name}.`);
-      await loadAgents(detail.agent.id);
+      const linked = personas.find((persona) => persona.id === versionForm.persona_id);
+      setNotice(
+        linked
+          ? `Nova versao publicada para ${detail.agent.name}, vinculada a ${linked.name}.`
+          : `Nova versao publicada para ${detail.agent.name} sem persona vinculada.`,
+      );
+      await loadReferenceData(detail.agent.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Falha ao publicar nova versao.");
     } finally {
       setIsPublishing(false);
+    }
+  }
+
+  async function handlePublishExistingVersion(versionNo: number) {
+    if (!detail) {
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    try {
+      await fetchJson<AgentVersion>(`/api/proxy/agents/${detail.agent.id}/versions/${versionNo}/publish`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setNotice(`Versao v${versionNo} publicada para ${detail.agent.name}.`);
+      await loadReferenceData(detail.agent.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao publicar versao.");
+    }
+  }
+
+  async function handleDeleteAgent() {
+    if (!detail) {
+      return;
+    }
+    const confirmed = window.confirm(`Excluir o agente "${detail.agent.name}"?`);
+    if (!confirmed) {
+      return;
+    }
+    setIsDeleting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await fetchJson<Agent>(`/api/proxy/agents/${detail.agent.id}`, { method: "DELETE" });
+      setNotice(`Agente ${detail.agent.name} excluido.`);
+      await loadReferenceData();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao excluir agente.");
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -155,7 +288,7 @@ export default function AgentsPage() {
         <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--accent)]">Agent Studio</p>
         <h1 className="mt-3 text-3xl font-semibold">Atendentes</h1>
         <p className="mt-2 max-w-3xl text-sm text-white/70">
-          Cadastre atendentes, publique novas versões e mantenha cada agente alinhado ao contexto comercial do tenant.
+          Cadastre agentes, edite o perfil operacional e publique versões com a persona certa vinculada ao comportamento.
         </p>
       </section>
 
@@ -168,7 +301,7 @@ export default function AgentsPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold">Catálogo</h2>
-                <p className="mt-1 text-sm text-white/60">Selecione um agente para revisar a versão ativa e o histórico.</p>
+                <p className="mt-1 text-sm text-white/60">Selecione um agente para editar dados e publicação.</p>
               </div>
               <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/55">{agents.length} ativos</span>
             </div>
@@ -215,14 +348,21 @@ export default function AgentsPage() {
             <form className="mt-4 space-y-3" onSubmit={handleCreateAgent}>
               <input
                 value={createForm.name}
-                onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value }))}
+                onChange={(event) => {
+                  const nextName = event.target.value;
+                  setCreateForm((current) => ({
+                    ...current,
+                    name: nextName,
+                    slug: current.slug ? current.slug : sanitizeSlug(nextName),
+                  }));
+                }}
                 placeholder="Nome do agente"
                 className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none placeholder:text-white/30"
                 required
               />
               <input
                 value={createForm.slug}
-                onChange={(event) => setCreateForm((current) => ({ ...current, slug: event.target.value }))}
+                onChange={(event) => setCreateForm((current) => ({ ...current, slug: sanitizeSlug(event.target.value) }))}
                 placeholder="slug-do-agente"
                 className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none placeholder:text-white/30"
                 required
@@ -234,6 +374,18 @@ export default function AgentsPage() {
                 rows={3}
                 className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none placeholder:text-white/30"
               />
+              <select
+                value={createForm.persona_id}
+                onChange={(event) => setCreateForm((current) => ({ ...current, persona_id: event.target.value }))}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+              >
+                <option value="">Sem persona vinculada</option>
+                {activePersonas.map((persona) => (
+                  <option key={persona.id} value={persona.id}>
+                    {persona.name} {persona.active_version_no ? `(v${persona.active_version_no})` : ""}
+                  </option>
+                ))}
+              </select>
               <textarea
                 value={createForm.prompt_system}
                 onChange={(event) => setCreateForm((current) => ({ ...current, prompt_system: event.target.value }))}
@@ -254,67 +406,174 @@ export default function AgentsPage() {
         </div>
 
         <div className="space-y-5">
-          <article className="rounded-[24px] border border-white/10 bg-white/5 p-5">
-            <h2 className="text-xl font-semibold">Versão ativa e histórico</h2>
-            {detail ? (
-              <div className="mt-4 space-y-4">
-                <div className="rounded-[20px] border border-white/10 bg-black/20 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <strong>{detail.agent.name}</strong>
-                      <p className="mt-1 text-xs uppercase tracking-wide text-white/40">{detail.agent.slug}</p>
-                    </div>
-                    <span className="rounded-full border border-[var(--accent)] px-3 py-1 text-xs text-emerald-200">
-                      publicada v{detail.agent.active_version_no ?? "-"}
-                    </span>
+          {detail ? (
+            <>
+              <article className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold">Dados do agente</h2>
+                    <p className="mt-1 text-sm text-white/60">Edite identificação operacional sem publicar nova versão.</p>
                   </div>
-                  <p className="mt-3 text-sm text-white/65">{detail.agent.description || "Sem descricao operacional."}</p>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteAgent()}
+                    disabled={isDeleting}
+                    className="rounded-full border border-red-400/35 px-4 py-2 text-sm text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isDeleting ? "Excluindo..." : "Excluir"}
+                  </button>
                 </div>
+                <form className="mt-5 space-y-3" onSubmit={handleSaveAgentMeta}>
+                  <input
+                    value={editorForm.name}
+                    onChange={(event) => setEditorForm((current) => ({ ...current, name: event.target.value }))}
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+                    required
+                  />
+                  <input
+                    value={editorForm.slug}
+                    onChange={(event) => setEditorForm((current) => ({ ...current, slug: sanitizeSlug(event.target.value) }))}
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+                    required
+                  />
+                  <textarea
+                    value={editorForm.description}
+                    onChange={(event) => setEditorForm((current) => ({ ...current, description: event.target.value }))}
+                    rows={3}
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+                  />
+                  <select
+                    value={editorForm.status}
+                    onChange={(event) => setEditorForm((current) => ({ ...current, status: event.target.value }))}
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+                  >
+                    <option value="active">Ativo</option>
+                    <option value="paused">Pausado</option>
+                  </select>
+                  <button
+                    type="submit"
+                    disabled={isSavingMeta}
+                    className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSavingMeta ? "Salvando..." : "Salvar dados"}
+                  </button>
+                </form>
+              </article>
 
-                <div className="rounded-[20px] border border-white/10 bg-black/20 p-4">
-                  <p className="text-xs uppercase tracking-wide text-white/40">Prompt ativo</p>
-                  <pre className="mt-3 whitespace-pre-wrap text-sm text-white/80">{detail.versions[0]?.prompt_system || "Sem versao."}</pre>
+              <article className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+                <h2 className="text-xl font-semibold">Vinculação e prompt</h2>
+                <p className="mt-2 text-sm text-white/60">
+                  Cada nova versão pode trocar a persona vinculada. Se nenhuma for escolhida, o agente opera só com o prompt publicado.
+                </p>
+                <div className="mt-4 rounded-[20px] border border-white/10 bg-black/20 p-4">
+                  <p className="text-xs uppercase tracking-wide text-white/40">Vínculo ativo</p>
+                  <p className="mt-2 text-sm text-white/80">
+                    {linkedPersona
+                      ? `${linkedPersona.name} • v${currentVersion?.persona_version_no ?? linkedPersona.active_version_no ?? "-"}`
+                      : "Sem persona vinculada"}
+                  </p>
                 </div>
+                <form className="mt-4 space-y-3" onSubmit={handlePublishVersion}>
+                  <select
+                    value={versionForm.persona_id}
+                    onChange={(event) => setVersionForm((current) => ({ ...current, persona_id: event.target.value }))}
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+                  >
+                    <option value="">Sem persona vinculada</option>
+                    {currentVersion?.persona_id && linkedPersona && !linkedPersona.is_active ? (
+                      <option value={linkedPersona.id}>
+                        {linkedPersona.name} {currentVersion.persona_version_no ? `(v${currentVersion.persona_version_no})` : ""} (inativa)
+                      </option>
+                    ) : null}
+                    {activePersonas.map((persona) => (
+                      <option key={persona.id} value={persona.id}>
+                        {persona.name} {persona.active_version_no ? `(v${persona.active_version_no})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <textarea
+                    value={versionForm.prompt_system}
+                    onChange={(event) => setVersionForm((current) => ({ ...current, prompt_system: event.target.value }))}
+                    rows={8}
+                    placeholder="Prompt atualizado"
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none placeholder:text-white/30"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={isPublishing}
+                    className="rounded-full bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isPublishing ? "Publicando..." : "Publicar nova versão"}
+                  </button>
+                </form>
+              </article>
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  {detail.versions.map((version) => (
-                    <article key={version.id} className="rounded-[20px] border border-white/10 bg-black/20 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <strong className="text-sm">Versao {version.version_no}</strong>
-                        <span className="text-xs text-white/45">{version.is_published ? "publicada" : "rascunho"}</span>
+              <article className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+                <h2 className="text-xl font-semibold">Versão ativa e histórico</h2>
+                <div className="mt-4 space-y-4">
+                  <div className="rounded-[20px] border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <strong>{detail.agent.name}</strong>
+                        <p className="mt-1 text-xs uppercase tracking-wide text-white/40">{detail.agent.slug}</p>
                       </div>
-                      <p className="mt-2 text-xs text-white/40">{formatDateTimeSP(version.created_at)}</p>
-                      <p className="mt-3 line-clamp-4 text-sm text-white/65">{version.prompt_system}</p>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-white/60">Selecione um agente para abrir os detalhes.</p>
-            )}
-          </article>
+                      <span className="rounded-full border border-[var(--accent)] px-3 py-1 text-xs text-emerald-200">
+                        publicada v{detail.agent.active_version_no ?? "-"}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm text-white/65">{detail.agent.description || "Sem descricao operacional."}</p>
+                    <p className="mt-3 text-xs text-white/45">
+                      Persona ativa:{" "}
+                      {linkedPersona
+                        ? `${linkedPersona.name} • v${currentVersion?.persona_version_no ?? linkedPersona.active_version_no ?? "-"}`
+                        : "sem vinculo"}
+                    </p>
+                  </div>
 
-          <article className="rounded-[24px] border border-white/10 bg-white/5 p-5">
-            <h2 className="text-xl font-semibold">Publicar nova versão</h2>
-            <p className="mt-2 text-sm text-white/60">Use o prompt como unidade de iteração rápida do agente.</p>
-            <form className="mt-4 space-y-3" onSubmit={handlePublishVersion}>
-              <textarea
-                value={versionPrompt}
-                onChange={(event) => setVersionPrompt(event.target.value)}
-                rows={8}
-                placeholder="Prompt atualizado"
-                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none placeholder:text-white/30"
-                required
+                  <div className="rounded-[20px] border border-white/10 bg-black/20 p-4">
+                    <p className="text-xs uppercase tracking-wide text-white/40">Prompt ativo</p>
+                    <pre className="mt-3 whitespace-pre-wrap text-sm text-white/80">{currentVersion?.prompt_system || "Sem versao."}</pre>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {detail.versions.map((version) => {
+                      const versionPersona = personas.find((persona) => persona.id === version.persona_id);
+                      return (
+                        <article key={version.id} className="rounded-[20px] border border-white/10 bg-black/20 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <strong className="text-sm">Versao {version.version_no}</strong>
+                            <button
+                              type="button"
+                              onClick={() => void handlePublishExistingVersion(version.version_no)}
+                              className="text-xs text-[var(--accent)]"
+                            >
+                              {version.is_published ? "publicada" : "publicar"}
+                            </button>
+                          </div>
+                          <p className="mt-2 text-xs text-white/40">{formatDateTimeSP(version.created_at)}</p>
+                          <p className="mt-3 text-xs text-white/45">
+                            Persona:{" "}
+                            {versionPersona
+                              ? `${versionPersona.name} • v${version.persona_version_no ?? versionPersona.active_version_no ?? "-"}`
+                              : "sem vinculo"}
+                          </p>
+                          <p className="mt-3 line-clamp-4 text-sm text-white/65">{version.prompt_system}</p>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              </article>
+            </>
+          ) : (
+            <section className="rounded-[24px] border border-white/10 bg-white/5 p-6">
+              <EmptyState
+                title="Nenhum agente selecionado."
+                description="Escolha um agente existente ou crie um novo para começar."
               />
-              <button
-                type="submit"
-                disabled={!detail || isPublishing}
-                className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isPublishing ? "Publicando..." : "Criar versão publicada"}
-              </button>
-            </form>
-          </article>
+            </section>
+          )}
         </div>
       </section>
     </main>
