@@ -11,9 +11,9 @@
   - `python3 -m py_compile backend/app/services/conversation_context.py backend/app/agents/nodes.py backend/tests/test_agent_memory.py backend/tests/test_conversation_context.py` -> ok
   - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_agent_memory.py backend/tests/test_conversation_context.py` -> `9 passed`
 - Status atual:
-  - ajuste local pronto para publicar
+  - ajuste publicado em produção e health pública validada
 - Próximo passo recomendado:
-  - publicar e repetir uma conversa curta da Márcia para validar retenção de nome, bem, valor, prazo e lance
+  - repetir uma conversa curta da Márcia para validar retenção de nome, bem, valor, prazo e lance
 
 ## 2026-03-23
 - `sdr`: corrigi a perda de contexto da Márcia quando o lead responde com valores curtos em sequência.
