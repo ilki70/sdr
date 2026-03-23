@@ -1,6 +1,23 @@
 # Worklog
 
 ## 2026-03-23
+- `sdr`: a tela de `Products` foi publicada com CRUD funcional em produção.
+- O que mudou nesta passada:
+  - a página `/products` passou a permitir criar, selecionar, editar e excluir produtos
+  - o inventário agora mostra cliente, versão, preço, estado e timestamps
+  - a stack `sdr` foi reaplicada no Portainer com `pullImage=true`
+  - os serviços convergiram para os novos digests de backend/frontend/whatsapp-gateway
+- Validação executada:
+  - `PATH=/home/ilki/.nvm/versions/node/v20.20.1/bin:$PATH npm run typecheck` -> ok
+  - `PATH=/home/ilki/.nvm/versions/node/v20.20.1/bin:$PATH npm run build` -> ok
+  - `https://pulse.orfi.com.br/health` -> `200`
+  - `https://pulse.orfi.com.br/api/auth/providers` -> `200`
+- Status atual:
+  - CRUD de produtos corrigido e publicado
+- Próximo passo recomendado:
+  - smoke manual autenticado na página de produtos para validar criação, edição e exclusão no fluxo real
+
+## 2026-03-23
 - `sdr`: corrigi a tela de `Products` para suportar gestão completa de produto no frontend.
 - O que mudou nesta passada:
   - a página `/products` passou a ter fluxo de criação, seleção, edição e exclusão
