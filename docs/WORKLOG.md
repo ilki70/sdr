@@ -12,9 +12,9 @@
   - `python3 -m py_compile backend/app/agents/nodes.py backend/app/agents/state.py backend/app/agents/tools.py backend/app/schemas/agents.py backend/app/schemas/messages.py backend/app/services/conversation_context.py backend/app/services/messages.py backend/app/services/training.py backend/app/services/agents.py backend/app/services/llm.py backend/tests/test_agent_memory.py backend/tests/test_conversation_context.py` -> ok
   - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_agent_memory.py backend/tests/test_conversation_context.py` -> `7 passed`
 - Status atual:
-  - ajuste local pronto para publicar
+  - ajuste publicado em produção e health pública validada
 - Próximo passo recomendado:
-  - commit/push e redeploy da stack `sdr`, depois repetir a simulacao da Márcia para confirmar menos repetição
+  - repetir a simulacao da Márcia para confirmar menos repetição no fluxo real
 
 ## 2026-03-23
 - `sdr`: ajustei o comportamento da Márcia para um primeiro atendimento mais simpático e humano.
