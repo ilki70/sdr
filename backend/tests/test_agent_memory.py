@@ -17,11 +17,11 @@ def test_build_conversation_memory_tracks_latest_property_details() -> None:
 
     memory = _build_conversation_memory(history, "400mil")
 
-    assert memory["property_type"] == "casa"
-    assert memory["property_value"] == "R$ 400mil"
+    assert memory["asset_type"] == "casa"
+    assert memory["asset_value"] == "R$ 400mil"
     assert memory["timeline"] == "6 meses"
     assert memory["lance"] == "R$ 200mil"
-    assert "quero comprar a casa em até 6 meses" in memory["summary"]
+    assert "goal=uns 500mil..quero comprar a casa em até 6 meses" in memory["summary"]
 
 
 def test_build_conversation_memory_ignores_lance_as_property_value() -> None:
@@ -29,8 +29,8 @@ def test_build_conversation_memory_ignores_lance_as_property_value() -> None:
 
     memory = _build_conversation_memory(history, "qual o prazo?")
 
-    assert memory["property_type"] == "nao informado"
-    assert memory["property_value"] == "nao informado"
+    assert memory["asset_type"] == "nao informado"
+    assert memory["asset_value"] == "nao informado"
     assert memory["lance"] == "R$ 200mil"
 
 
@@ -54,7 +54,9 @@ def test_build_conversation_memory_maps_short_numeric_reply_to_lance_when_prompt
 
     memory = _build_conversation_memory(history, "10mil")
 
-    assert memory["property_type"] == "moto"
-    assert memory["property_value"] == "R$ 25mil"
+    assert memory["asset_type"] == "moto"
+    assert memory["asset_value"] == "R$ 25mil"
     assert memory["timeline"] == "80 meses"
     assert memory["lance"] == "R$ 10mil"
+    assert memory["current_question_slot"] == "nao informado"
+    assert memory["last_confirmed_slot"] == "lance"

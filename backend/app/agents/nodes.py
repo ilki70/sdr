@@ -142,69 +142,35 @@ def _infer_expected_slot(history: list[dict[str, str]]) -> str | None:
 
 
 def _build_conversation_memory(history: list[dict[str, str]], current_message: str) -> dict[str, str]:
-    property_type: str | None = None
-    property_value: str | None = None
-    timeline: str | None = None
-    lance: str | None = None
-    summary_parts: list[str] = []
-    expected_slot = _infer_expected_slot(history)
-
-    messages = history + [{"role": "user", "content": current_message}]
-    for index, item in enumerate(messages):
-        content = item.get("content", "")
-        if not content:
-            continue
-        role = item.get("role", "user")
-        if role == "user":
-            extracted_type = _extract_property_type(content)
-            if extracted_type:
-                property_type = extracted_type
-
-            extracted_timeline = _extract_timeline(content)
-            if extracted_timeline:
-                timeline = extracted_timeline
-
-            extracted_lance = _extract_lance(content)
-            if extracted_lance:
-                lance = extracted_lance
-
-            extracted_value = _extract_amount(content)
-            folded = _fold(content)
-            if extracted_value:
-                if "lance" in folded:
-                    lance = extracted_value
-                elif index == len(messages) - 1 and expected_slot == "lance":
-                    lance = extracted_value
-                elif index == len(messages) - 1 and expected_slot == "property_value":
-                    property_value = extracted_value
-                elif "lance" not in folded and not _looks_like_timeline_answer(content):
-                    property_value = extracted_value
-
-            if any(term in folded for term in ["quero", "gostaria", "objetivo", "pretendo", "quero ver", "quero comprar"]):
-                summary_parts.append(_clean_text(content))
-
-    if property_type:
-        summary_parts.append(f"tipo_de_imovel={property_type}")
-    if property_value:
-        summary_parts.append(f"valor_do_imovel={property_value}")
-    if timeline:
-        summary_parts.append(f"prazo={timeline}")
-    if lance:
-        summary_parts.append(f"lance={lance}")
-
+    messages = history + ([{"role": "user", "content": current_message}] if current_message else [])
+    snapshot = build_conversation_context_snapshot(
+        messages,
+        tenant_id="memory",
+        conversation_id="memory",
+        last_intent="unknown",
+    )
     return {
-        "property_type": property_type or "nao informado",
-        "property_value": property_value or "nao informado",
-        "timeline": timeline or "nao informado",
-        "lance": lance or "nao informado",
-        "summary": "; ".join(summary_parts) if summary_parts else "sem fatos estruturados",
+        "lead_name": snapshot.lead_name,
+        "asset_type": snapshot.asset_type,
+        "asset_value": snapshot.asset_value,
+        "target_use_case": snapshot.target_use_case,
+        "goal": snapshot.goal,
+        "timeline": snapshot.timeline,
+        "lance": snapshot.lance,
+        "current_question_slot": snapshot.current_question_slot,
+        "last_confirmed_slot": snapshot.last_confirmed_slot,
+        "summary": snapshot.summary,
+        "extracted_slots": str(snapshot.extracted_slots),
     }
 
 
 def _build_conversation_delta(previous: dict[str, str], current: dict[str, str]) -> list[str]:
     labels = {
-        "property_type": "tipo_de_imovel",
-        "property_value": "valor_do_imovel",
+        "lead_name": "lead_name",
+        "asset_type": "asset_type",
+        "asset_value": "asset_value",
+        "target_use_case": "target_use_case",
+        "goal": "goal",
         "timeline": "prazo",
         "lance": "lance",
     }
@@ -301,9 +267,9 @@ def _build_follow_up_suggestion(state: AgentState, persona: dict[str, str] | Non
     query = _fold(state.message_text)
     memory = _build_conversation_memory(state.conversation_history, state.message_text)
 
-    if memory["property_type"] != "nao informado" and memory["property_value"] != "nao informado" and memory["timeline"] != "nao informado":
+    if memory["asset_type"] != "nao informado" and memory["asset_value"] != "nao informado" and memory["timeline"] != "nao informado":
         core = "Se fizer sentido, eu sigo com a proposta e a simulacao usando o valor do bem, o prazo e o lance que voce ja passou."
-    elif memory["property_type"] != "nao informado" and memory["property_value"] != "nao informado":
+    elif memory["asset_type"] != "nao informado" and memory["asset_value"] != "nao informado":
         core = "Se quiser, eu sigo com a simulacao usando o valor do bem que voce ja passou."
     elif "orcamento" in query or "parcela" in query or state.intent == "price":
         core = "Qual faixa de parcela cabe hoje no seu orcamento para eu montar a melhor simulacao?"
@@ -313,8 +279,10 @@ def _build_follow_up_suggestion(state: AgentState, persona: dict[str, str] | Non
         core = "Me diga o objetivo do investimento, o valor do bem e o prazo desejado para eu alinhar a melhor proposta."
     elif "seminovo" in query or "carro" in query:
         core = "Me diga o veiculo desejado, ano e faixa de valor para eu direcionar a simulacao."
-    elif memory["property_type"] in {"casa", "imovel", "apartamento", "sobrado", "terreno"}:
+    elif memory["asset_type"] in {"casa", "imovel", "apartamento", "sobrado", "terreno"}:
         core = "Me diga o tipo de imovel, a faixa de valor e o prazo para eu direcionar a simulacao."
+    elif memory["asset_type"] in {"moto", "carro", "veiculo", "caminhao", "caminhonete"}:
+        core = "Me diga a faixa de valor, o prazo e se voce pretende usar lance para eu direcionar a simulacao."
     else:
         core = "Se quiser, eu sigo com uma simulacao guiada usando valor do bem, prazo e faixa de parcela."
 
@@ -375,7 +343,7 @@ async def _get_agent_runtime_context(state: AgentState) -> dict[str, str]:
 
 async def classify_intent(state: AgentState) -> AgentState:
     text = _fold(state.message_text)
-    if any(word in text for word in ["casa", "imovel", "apartamento", "sobrado", "terreno"]):
+    if any(word in text for word in ["casa", "imovel", "apartamento", "sobrado", "terreno", "moto", "carro", "veiculo", "caminhao", "caminhonete"]):
         state.intent = "property"
     elif any(word in text for word in ["investir", "investimento", "vale a pena", "retorno", "aplicar", "aplicacao"]):
         state.intent = "investment"
@@ -439,8 +407,10 @@ async def compose_reply(state: AgentState) -> AgentState:
         f"{_build_first_touch_style_guidance(state)} "
         "Se faltar dado, deixe claro e faca uma pergunta objetiva. "
         "Nao volte a pedir informacoes ja informadas na memoria da conversa. "
-        "Se o lead enviar apenas um numero ou valor curto, trate como atualizacao do campo mais provavel ja discutido na conversa. "
-        "Se a conversa ja tiver valor do bem, prazo e lance, consolide esses dados e avance para simulacao ou proposta, sem recomeçar a qualificacao. "
+        "Use os slots estruturados da memoria curta como fonte principal de contexto da conversa. "
+        "So atualize um slot quando houver alta confianca no texto do lead ou quando a ultima pergunta do assistente apontar explicitamente esse slot. "
+        "Se o lead enviar apenas um numero ou valor curto, trate como resposta ao slot perguntado no turno anterior. "
+        "Se a conversa ja tiver bem, valor, prazo e lance, consolide esses dados e avance para simulacao ou proposta, sem recomeçar a qualificacao. "
         f"Dados novos desta rodada={new_facts_block}. "
         "Se houver dado novo, confirme apenas esse dado, sem refazer todo o resumo e sem reapresentar o proprio nome. "
         "Se nao houver dado novo, nao comece com confirmacao; avance com uma pergunta ou um proximo passo util. "

@@ -1,6 +1,21 @@
 # Worklog
 
 ## 2026-03-23
+- `sdr`: reestruturei a memória curta da conversa para slots mais robustos e genéricos.
+- O que mudou nesta passada:
+  - o snapshot em Redis saiu do eixo `property_*` e passou a guardar `lead_name`, `asset_type`, `asset_value`, `target_use_case`, `goal`, `timeline`, `lance`, `current_question_slot` e `last_confirmed_slot`
+  - os slots extraídos foram separados do resumo textual em `extracted_slots` + `summary`
+  - a atualização de slot agora depende de alta confiança no texto ou de pergunta explícita do turno anterior
+  - o `nodes.py` passou a consumir essa memória curta estruturada em vez de manter uma heurística paralela solta
+- Validação executada:
+  - `python3 -m py_compile backend/app/services/conversation_context.py backend/app/agents/nodes.py backend/tests/test_agent_memory.py backend/tests/test_conversation_context.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_agent_memory.py backend/tests/test_conversation_context.py` -> `9 passed`
+- Status atual:
+  - ajuste local pronto para publicar
+- Próximo passo recomendado:
+  - publicar e repetir uma conversa curta da Márcia para validar retenção de nome, bem, valor, prazo e lance
+
+## 2026-03-23
 - `sdr`: corrigi a perda de contexto da Márcia quando o lead responde com valores curtos em sequência.
 - O que mudou nesta passada:
   - a memória e o snapshot de conversa agora inferem o slot esperado a partir da última pergunta do assistente

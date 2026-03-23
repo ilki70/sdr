@@ -18,11 +18,17 @@ FRAGMENT_BUFFER_WINDOW_SECONDS = 6
 class ConversationContextSnapshot(BaseModel):
     tenant_id: str
     conversation_id: str
-    property_type: str = "nao informado"
-    property_value: str = "nao informado"
+    asset_type: str = "nao informado"
+    asset_value: str = "nao informado"
+    target_use_case: str = "nao informado"
+    lead_name: str = "nao informado"
+    goal: str = "nao informado"
     timeline: str = "nao informado"
     lance: str = "nao informado"
     last_intent: str = "unknown"
+    current_question_slot: str = "nao informado"
+    last_confirmed_slot: str = "nao informado"
+    extracted_slots: dict[str, str] = Field(default_factory=dict)
     summary: str = "sem fatos estruturados"
     media_summary: str = "sem midia"
     turn_count: int = 0
@@ -33,6 +39,13 @@ class ConversationContextSnapshot(BaseModel):
 
 def _clean_text(value: str) -> str:
     return " ".join(value.replace("\n", " ").split()).strip()
+
+
+def _fold_text(value: str) -> str:
+    import unicodedata
+
+    normalized = unicodedata.normalize("NFKD", value.lower())
+    return "".join(char for char in normalized if not unicodedata.combining(char))
 
 
 def _is_greeting_or_ack(text: str) -> bool:
@@ -51,6 +64,31 @@ def _is_greeting_or_ack(text: str) -> bool:
         "certo",
         "beleza",
     }
+
+
+def _looks_like_name(text: str) -> bool:
+    cleaned = _clean_text(text)
+    if not cleaned or any(char.isdigit() for char in cleaned):
+        return False
+    words = cleaned.split()
+    if len(words) > 3:
+        return False
+    folded = _fold_text(cleaned)
+    blocked = {
+        "oi",
+        "ola",
+        "olá",
+        "sim",
+        "nao",
+        "não",
+        "quero",
+        "moto",
+        "carro",
+        "imovel",
+        "investimento",
+        "consorcio",
+    }
+    return folded not in blocked
 
 
 def _format_currency_like(value: str) -> str:
@@ -164,6 +202,44 @@ def _extract_lance(text: str) -> str | None:
     return _extract_amount(text)
 
 
+def _extract_lead_name(text: str) -> str | None:
+    import re
+
+    cleaned = _clean_text(text)
+    folded = _fold_text(cleaned)
+    match = re.search(r"\b(?:meu nome e|me chamo|sou)\s+([a-zà-ÿ][a-zà-ÿ'\- ]{0,40})$", cleaned, flags=re.IGNORECASE)
+    if match:
+        candidate = _clean_text(match.group(1))
+        return candidate.title() if _looks_like_name(candidate) else None
+    if _looks_like_name(cleaned):
+        return cleaned.title()
+    if folded.startswith("sou "):
+        candidate = _clean_text(cleaned[4:])
+        return candidate.title() if _looks_like_name(candidate) else None
+    return None
+
+
+def _extract_target_use_case(text: str) -> str | None:
+    folded = _fold_text(text)
+    if any(term in folded for term in ["investir", "investimento", "retorno", "aplicar"]):
+        return "investimento"
+    if any(term in folded for term in ["morar", "moradia", "imovel proprio", "imovel próprio", "casa propria", "casa própria"]):
+        return "moradia"
+    if any(term in folded for term in ["trabalho", "trabalhar", "uber", "rodar", "frota"]):
+        return "trabalho"
+    if any(term in folded for term in ["lazer", "passeio", "viagem", "uso pessoal"]):
+        return "uso_pessoal"
+    return None
+
+
+def _extract_goal(text: str) -> str | None:
+    cleaned = _clean_text(text)
+    folded = _fold_text(cleaned)
+    if any(term in folded for term in ["quero", "gostaria", "pretendo", "busco", "objetivo"]):
+        return cleaned
+    return None
+
+
 def _infer_expected_slot(messages: list[dict[str, str]]) -> str | None:
     last_assistant_message = next(
         (item.get("content", "") for item in reversed(messages) if item.get("role") == "assistant" and item.get("content")),
@@ -176,14 +252,18 @@ def _infer_expected_slot(messages: list[dict[str, str]]) -> str | None:
 
     normalized = unicodedata.normalize("NFKD", last_assistant_message.lower())
     folded = "".join(char for char in normalized if not unicodedata.combining(char))
+    if "nome" in folded:
+        return "lead_name"
     if "lance" in folded:
         return "lance"
     if "prazo" in folded or "meses" in folded or "anos" in folded:
         return "timeline"
     if "valor" in folded or "faixa de valor" in folded or "quanto" in folded:
-        return "property_value"
-    if "tipo de imovel" in folded or "qual bem" in folded or "qual veiculo" in folded:
-        return "property_type"
+        return "asset_value"
+    if "tipo de imovel" in folded or "qual bem" in folded or "qual veiculo" in folded or "qual moto" in folded:
+        return "asset_type"
+    if "objetivo" in folded or "pretende" in folded or "finalidade" in folded:
+        return "goal"
     return None
 
 
@@ -265,13 +345,17 @@ def build_conversation_context_snapshot(
     last_intent: str | None = None,
     media_notes: list[str] | None = None,
 ) -> ConversationContextSnapshot:
-    property_type: str | None = None
-    property_value: str | None = None
+    asset_type: str | None = None
+    asset_value: str | None = None
+    target_use_case: str | None = None
+    lead_name: str | None = None
+    goal: str | None = None
     timeline: str | None = None
     lance: str | None = None
     summary_parts: list[str] = []
     turn_count = 0
-    expected_slot = None
+    expected_slot: str | None = None
+    last_confirmed_slot: str | None = None
 
     for item in messages:
         content = item.get("content", "")
@@ -283,40 +367,79 @@ def build_conversation_context_snapshot(
             continue
         if role == "user":
             turn_count += 1
+            extracted_name = _extract_lead_name(content)
+            if extracted_name and (expected_slot == "lead_name" or lead_name is None):
+                lead_name = extracted_name
+                last_confirmed_slot = "lead_name"
+
+            extracted_use_case = _extract_target_use_case(content)
+            if extracted_use_case:
+                target_use_case = extracted_use_case
+                last_confirmed_slot = "target_use_case"
+
+            extracted_goal = _extract_goal(content)
+            if extracted_goal and (expected_slot == "goal" or "quero" in content.lower() or "pretendo" in content.lower()):
+                goal = extracted_goal
+                last_confirmed_slot = "goal"
+
             extracted_type = _extract_property_type(content)
             if extracted_type:
-                property_type = extracted_type
+                asset_type = extracted_type
+                last_confirmed_slot = "asset_type"
 
             extracted_timeline = _extract_timeline(content)
-            if extracted_timeline:
+            if extracted_timeline and (expected_slot == "timeline" or _looks_like_timeline_answer(content)):
                 timeline = extracted_timeline
+                last_confirmed_slot = "timeline"
 
             extracted_lance = _extract_lance(content)
             if extracted_lance:
                 lance = extracted_lance
+                last_confirmed_slot = "lance"
 
             extracted_value = _extract_amount(content)
             lowered = content.lower()
             if extracted_value:
                 if "lance" in lowered:
                     lance = extracted_value
+                    last_confirmed_slot = "lance"
                 elif expected_slot == "lance":
                     lance = extracted_value
-                elif expected_slot == "property_value":
-                    property_value = extracted_value
+                    last_confirmed_slot = "lance"
+                elif expected_slot == "asset_value":
+                    asset_value = extracted_value
+                    last_confirmed_slot = "asset_value"
                 elif "lance" not in lowered and not _looks_like_timeline_answer(content):
-                    property_value = extracted_value
+                    asset_value = extracted_value
+                    last_confirmed_slot = "asset_value"
 
             if any(term in content.lower() for term in ["quero", "gostaria", "objetivo", "pretendo", "quero ver", "quero comprar"]):
                 summary_parts.append(_clean_text(content))
 
-    if property_type:
-        summary_parts.append(f"tipo_de_imovel={property_type}")
-    if property_value:
-        summary_parts.append(f"valor_do_imovel={property_value}")
+            if expected_slot and last_confirmed_slot == expected_slot:
+                expected_slot = None
+
+    extracted_slots: dict[str, str] = {}
+    if lead_name:
+        extracted_slots["lead_name"] = lead_name
+        summary_parts.append(f"lead_name={lead_name}")
+    if asset_type:
+        extracted_slots["asset_type"] = asset_type
+        summary_parts.append(f"asset_type={asset_type}")
+    if asset_value:
+        extracted_slots["asset_value"] = asset_value
+        summary_parts.append(f"asset_value={asset_value}")
+    if target_use_case:
+        extracted_slots["target_use_case"] = target_use_case
+        summary_parts.append(f"target_use_case={target_use_case}")
+    if goal:
+        extracted_slots["goal"] = goal
+        summary_parts.append(f"goal={goal}")
     if timeline:
+        extracted_slots["timeline"] = timeline
         summary_parts.append(f"prazo={timeline}")
     if lance:
+        extracted_slots["lance"] = lance
         summary_parts.append(f"lance={lance}")
 
     latest_user_message = next(
@@ -327,11 +450,17 @@ def build_conversation_context_snapshot(
     return ConversationContextSnapshot(
         tenant_id=tenant_id,
         conversation_id=conversation_id,
-        property_type=property_type or "nao informado",
-        property_value=property_value or "nao informado",
+        asset_type=asset_type or "nao informado",
+        asset_value=asset_value or "nao informado",
+        target_use_case=target_use_case or "nao informado",
+        lead_name=lead_name or "nao informado",
+        goal=goal or "nao informado",
         timeline=timeline or "nao informado",
         lance=lance or "nao informado",
         last_intent=last_intent or (infer_turn_intent(latest_user_message) if latest_user_message else "unknown"),
+        current_question_slot=expected_slot or "nao informado",
+        last_confirmed_slot=last_confirmed_slot or "nao informado",
+        extracted_slots=extracted_slots,
         summary="; ".join(summary_parts) if summary_parts else "sem fatos estruturados",
         media_summary=" | ".join(media_notes) if media_notes else "sem midia",
         turn_count=turn_count,
@@ -417,10 +546,16 @@ def format_conversation_context_for_prompt(snapshot: ConversationContextSnapshot
     if snapshot is None:
         return "contexto estruturado ausente"
     return (
-        f"tipo_de_imovel={snapshot.property_type}; "
-        f"valor_do_imovel={snapshot.property_value}; "
+        f"lead_name={snapshot.lead_name}; "
+        f"asset_type={snapshot.asset_type}; "
+        f"asset_value={snapshot.asset_value}; "
+        f"target_use_case={snapshot.target_use_case}; "
+        f"goal={snapshot.goal}; "
         f"prazo={snapshot.timeline}; "
         f"lance={snapshot.lance}; "
+        f"slot_atual={snapshot.current_question_slot}; "
+        f"ultimo_slot_confirmado={snapshot.last_confirmed_slot}; "
+        f"slots_extraidos={snapshot.extracted_slots}; "
         f"ultima_intencao={snapshot.last_intent}; "
         f"turnos={snapshot.turn_count}; "
         f"midia={snapshot.media_summary}; "

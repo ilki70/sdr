@@ -20,7 +20,10 @@ class FakeRedis:
 
 def test_build_conversation_context_snapshot_tracks_property_slots() -> None:
     messages = [
-        {"role": "user", "content": "quero ver para uma casa"},
+        {"role": "assistant", "content": "Posso saber seu nome?"},
+        {"role": "user", "content": "Ilki"},
+        {"role": "assistant", "content": "Qual e o seu objetivo com o consorcio?"},
+        {"role": "user", "content": "quero ver para uma casa para investir"},
         {"role": "assistant", "content": "Ótimo."},
         {"role": "user", "content": "uns 500mil..quero comprar a casa em até 6 meses"},
         {"role": "assistant", "content": "Entendi."},
@@ -35,12 +38,15 @@ def test_build_conversation_context_snapshot_tracks_property_slots() -> None:
         last_intent="property",
     )
 
-    assert snapshot.property_type == "casa"
-    assert snapshot.property_value == "R$ 400mil"
+    assert snapshot.lead_name == "Ilki"
+    assert snapshot.asset_type == "casa"
+    assert snapshot.asset_value == "R$ 400mil"
+    assert snapshot.target_use_case == "investimento"
     assert snapshot.timeline == "6 meses"
     assert snapshot.lance == "R$ 200mil"
     assert snapshot.last_intent == "property"
-    assert "tipo_de_imovel=casa" in snapshot.summary
+    assert snapshot.extracted_slots["asset_type"] == "casa"
+    assert "lead_name=Ilki" in snapshot.summary
 
 
 def test_context_cache_roundtrip(monkeypatch) -> None:
@@ -50,12 +56,18 @@ def test_context_cache_roundtrip(monkeypatch) -> None:
     snapshot = conversation_context.ConversationContextSnapshot(
         tenant_id="tenant-1",
         conversation_id="conv-1",
-        property_type="casa",
-        property_value="R$ 400mil",
+        lead_name="Ilki",
+        asset_type="casa",
+        asset_value="R$ 400mil",
+        target_use_case="investimento",
+        goal="quero investir em uma casa",
         timeline="6 meses",
         lance="R$ 200mil",
         last_intent="property",
-        summary="tipo_de_imovel=casa; valor_do_imovel=R$ 400mil; prazo=6 meses; lance=R$ 200mil",
+        current_question_slot="nao informado",
+        last_confirmed_slot="lance",
+        extracted_slots={"lead_name": "Ilki", "asset_type": "casa", "asset_value": "R$ 400mil", "timeline": "6 meses", "lance": "R$ 200mil"},
+        summary="lead_name=Ilki; asset_type=casa; asset_value=R$ 400mil; prazo=6 meses; lance=R$ 200mil",
         turn_count=3,
     )
 
@@ -66,7 +78,7 @@ def test_context_cache_roundtrip(monkeypatch) -> None:
     loaded = asyncio.run(roundtrip())
 
     assert loaded is not None
-    assert loaded.property_value == "R$ 400mil"
+    assert loaded.asset_value == "R$ 400mil"
     assert fake.ttls[conversation_context.conversation_context_cache_key("tenant-1", "conv-1")] >= 60
 
 
@@ -116,7 +128,9 @@ def test_build_conversation_context_snapshot_maps_short_numeric_reply_to_lance_w
         last_intent="property",
     )
 
-    assert snapshot.property_type == "moto"
-    assert snapshot.property_value == "R$ 25mil"
+    assert snapshot.asset_type == "moto"
+    assert snapshot.asset_value == "R$ 25mil"
     assert snapshot.timeline == "80 meses"
     assert snapshot.lance == "R$ 10mil"
+    assert snapshot.last_confirmed_slot == "lance"
+    assert snapshot.current_question_slot == "nao informado"
