@@ -1,6 +1,36 @@
 # Worklog
 
 ## 2026-03-22
+- `sdr`: adicionado um fluxo de treinamento para o agente vinculado a uma persona, com foco no primeiro atendimento da Márcia.
+- O que entrou:
+  - nova rota `POST /api/v1/agents/{agent_id}/training`
+  - novo `Training Lab` em [`/training`](/home/ilki/sdr/frontend/app/(app)/training/page.tsx)
+  - simulação de ciclos com `n` interações por ciclo, avaliação de qualidade e geração de recomendações
+  - opção de aplicar as melhorias automaticamente, publicando nova versão da persona e nova versão do agente vinculado
+  - atalho no menu lateral, command bar e link direto a partir da tela de `Agents`
+- Validação executada:
+  - `python3 -m py_compile` nos módulos backend alterados -> ok
+  - `npm run build` no frontend -> ok
+  - `npm run typecheck` no frontend -> ok
+- Status atual:
+  - fluxo de treino implementado e validado localmente
+- Proximo passo recomendado:
+  - rodar uma sessão de treino real para a Márcia em produção e ajustar os prompts gerados pelo trainer conforme os resultados
+
+## 2026-03-22
+- `sdr`: stack de producao reaplicada no Portainer com `pullImage=true` depois do commit `3dee802`.
+- Estado do deploy:
+  - Portainer autenticado com sucesso e stack localizada em `Id 35`, `endpointId 1`
+  - update da stack aceito via API com `PUT /api/stacks/35?endpointId=1`
+  - servicos convergiram para os novos digests do `ghcr.io/ilki70/sdr/{backend,frontend,whatsapp-gateway}:latest`
+  - `https://pulse.orfi.com.br/health` respondeu `200`
+  - `https://pulse.orfi.com.br/api/auth/providers` respondeu `200`
+- Status atual:
+  - deploy em producao concluido e funcional
+- Proximo passo recomendado:
+  - acompanhar o uso real das telas de `Personas` e `Agents` e, se necessario, ajustar microcopy/fluxos de edicao
+
+## 2026-03-22
 - Reestruturei as telas `Personas` e `Agents` para fluxo real de gestão:
   - `Personas` agora permite criar, editar metadados, ativar/inativar, publicar nova versão e excluir a persona selecionada
   - `Agents` agora permite criar, editar metadados, excluir, publicar nova versão e trocar explicitamente a persona vinculada em cada publicação

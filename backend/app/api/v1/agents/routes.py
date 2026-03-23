@@ -15,6 +15,7 @@ from app.schemas.agents import (
     ConsorcioStudioResponse,
     ConsorcioStudioUpdateRequest,
 )
+from app.schemas.training import AgentTrainingRequest, AgentTrainingResponse
 from app.services.agents import (
     count_active_agents,
     create_agent,
@@ -28,6 +29,7 @@ from app.services.agents import (
     update_consorcio_studio,
     update_agent,
 )
+from app.services.training import run_agent_training
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -175,3 +177,16 @@ async def patch_consorcio_studio(
         playbook=playbook,
         knowledge=knowledge,
     )
+
+
+@router.post("/{agent_id}/training", response_model=AgentTrainingResponse)
+async def post_agent_training(
+    agent_id: str,
+    payload: AgentTrainingRequest,
+    context: RequestContext = Depends(get_request_context),
+    db: AsyncSession = Depends(get_db_session),
+) -> AgentTrainingResponse:
+    try:
+        return await run_agent_training(db, context.tenant_id, context.user_id, agent_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

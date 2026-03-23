@@ -4,6 +4,7 @@ const shortcuts = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/knowledge", label: "Knowledge" },
   { href: "/agent-lab", label: "Agent Lab" },
+  { href: "/training", label: "Training" },
   { href: "/quality", label: "Quality" },
 ];
 

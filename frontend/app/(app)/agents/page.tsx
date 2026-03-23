@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { fetchJson } from "@/lib/api";
 import { formatDateTimeSP } from "@/lib/datetime";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -472,6 +473,14 @@ export default function AgentsPage() {
                       ? `${linkedPersona.name} • v${currentVersion?.persona_version_no ?? linkedPersona.active_version_no ?? "-"}`
                       : "Sem persona vinculada"}
                   </p>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link
+                    href={`/training?agentId=${detail.agent.id}`}
+                    className="rounded-full border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-4 py-2 text-sm text-emerald-100 transition hover:border-[var(--accent)]/50 hover:bg-[var(--accent)]/15"
+                  >
+                    Treinar persona vinculada
+                  </Link>
                 </div>
                 <form className="mt-4 space-y-3" onSubmit={handlePublishVersion}>
                   <select

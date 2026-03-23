@@ -18,6 +18,7 @@ Plataforma interna de operacao comercial com agentes de IA, backend FastAPI, fro
 - Reposicionar o produto para uso interno da equipe em consorcios/Turn2C.
 - Preservar o contexto multi-tenant entre frontend, backend e banco.
 - Evoluir o frontend para configurar comportamento do agente, ingerir conhecimento e acompanhar atendimentos em tempo real.
+- O fluxo de treino do agente agora existe em `/training`, com simulação de ciclos e publicação opcional de novas versões da persona/agente.
 - Consolidar `Conversations` como inbox/CRM operacional com funil persistido por conversa.
 - Manter o bootstrap local funcional enquanto a nova linha de produto evolui.
 - Manter um caminho administrativo de recuperacao de acesso para usuarios/tenants, sem expor reset publico irrestrito.
