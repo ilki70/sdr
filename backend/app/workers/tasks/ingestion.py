@@ -84,6 +84,10 @@ async def _run_knowledge_job(job_id: str, task_id: str | None) -> dict[str, Any]
     return {"status": "completed", "source_ids": source_ids, "indexed_sources": indexed_sources}
 
 
+async def run_knowledge_job_async(job_id: str, task_id: str | None = None) -> dict[str, Any]:
+    return await _run_knowledge_job(job_id, task_id)
+
+
 @celery_app.task(bind=True, autoretry_for=(Exception,), retry_kwargs={"max_retries": 2, "countdown": 5})
 def ingest_knowledge_job(self, job_id: str) -> dict[str, Any]:
-    return asyncio.run(_run_knowledge_job(job_id, self.request.id))
+    return asyncio.run(run_knowledge_job_async(job_id, self.request.id))

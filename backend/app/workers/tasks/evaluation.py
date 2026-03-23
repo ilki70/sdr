@@ -64,6 +64,10 @@ async def _run_evaluation(run_id: str, task_id: str | None) -> dict[str, Any]:
             raise
 
 
+async def run_evaluation_async(run_id: str, task_id: str | None = None) -> dict[str, Any]:
+    return await _run_evaluation(run_id, task_id)
+
+
 @celery_app.task(bind=True, autoretry_for=(Exception,), retry_kwargs={"max_retries": 1, "countdown": 5})
 def run_evaluation_job(self, run_id: str) -> dict[str, Any]:
-    return asyncio.run(_run_evaluation(run_id, self.request.id))
+    return asyncio.run(run_evaluation_async(run_id, self.request.id))

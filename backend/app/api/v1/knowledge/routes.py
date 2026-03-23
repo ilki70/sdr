@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.db import get_db_session
 from app.core.security import RequestContext, get_request_context
 from app.schemas.knowledge import (
@@ -34,10 +38,36 @@ from app.services.knowledge_ops import (
 from app.services.products import create_product_asset, get_product_or_none
 from app.services.uploads import persist_upload
 from app.services.vector_store import search_rag_context
-from app.workers.tasks.evaluation import run_evaluation_job
-from app.workers.tasks.ingestion import ingest_knowledge_job
+from app.workers.tasks.evaluation import run_evaluation_async, run_evaluation_job
+from app.workers.tasks.ingestion import ingest_knowledge_job, run_knowledge_job_async
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+
+def _track_background_task(task: asyncio.Task[object], label: str) -> None:
+    def _log_result(finished_task: asyncio.Task[object]) -> None:
+        try:
+            finished_task.result()
+        except Exception:
+            logger.exception("background_%s_failed", label)
+
+    task.add_done_callback(_log_result)
+
+
+def _enqueue_knowledge_job(job_id: str) -> None:
+    if settings.redis_url and not settings.celery_task_always_eager:
+        ingest_knowledge_job.delay(job_id)
+        return
+    _track_background_task(asyncio.create_task(run_knowledge_job_async(job_id)), "knowledge_job")
+
+
+def _enqueue_evaluation_job(run_id: str) -> None:
+    if settings.redis_url and not settings.celery_task_always_eager:
+        run_evaluation_job.delay(run_id)
+        return
+    _track_background_task(asyncio.create_task(run_evaluation_async(run_id)), "evaluation_job")
 
 
 @router.get("/sources", response_model=list[KnowledgeSourceResponse])
@@ -102,7 +132,7 @@ async def enqueue_url_ingestion(
         job_type="ingest_url",
         input_json={"source_ref": payload.source_ref},
     )
-    ingest_knowledge_job.delay(job.id)
+    _enqueue_knowledge_job(job.id)
     refreshed = await get_knowledge_job_or_none(db, context.tenant_id, job.id)
     assert refreshed is not None
     return KnowledgeJobResponse.model_validate(refreshed)
@@ -139,7 +169,7 @@ async def enqueue_upload_ingestion(
         job_type="ingest_file",
         input_json={"source_ref": path, "asset_id": asset.id},
     )
-    ingest_knowledge_job.delay(job.id)
+    _enqueue_knowledge_job(job.id)
     return KnowledgeUploadResponse(
         source=KnowledgeSourceResponse(
             id="pending",
@@ -175,7 +205,7 @@ async def enqueue_vinac_ingestion(
         job_type="ingest_vinac_official",
         input_json={"seed": "vinac_official"},
     )
-    ingest_knowledge_job.delay(job.id)
+    _enqueue_knowledge_job(job.id)
     refreshed = await get_knowledge_job_or_none(db, context.tenant_id, job.id)
     assert refreshed is not None
     return KnowledgeJobResponse.model_validate(refreshed)
@@ -201,7 +231,7 @@ async def enqueue_reingest_source(
         input_json={"source_id": source.id, "source_ref": source.source_ref},
         source_id=source.id,
     )
-    ingest_knowledge_job.delay(job.id)
+    _enqueue_knowledge_job(job.id)
     refreshed = await get_knowledge_job_or_none(db, context.tenant_id, job.id)
     assert refreshed is not None
     return KnowledgeJobResponse.model_validate(refreshed)
@@ -278,7 +308,7 @@ async def enqueue_vinac_evaluation(
         created_by_user_id=context.user_id,
         evaluation_type="vinac_sales_lab",
     )
-    run_evaluation_job.delay(run.id)
+    _enqueue_evaluation_job(run.id)
     refreshed = await get_evaluation_run_or_none(db, context.tenant_id, run.id)
     assert refreshed is not None
     return EvaluationRunResponse.model_validate(refreshed)
@@ -300,7 +330,7 @@ async def enqueue_segment_evaluation(
         created_by_user_id=context.user_id,
         evaluation_type="segment_consorcio_de_veiculos",
     )
-    run_evaluation_job.delay(run.id)
+    _enqueue_evaluation_job(run.id)
     refreshed = await get_evaluation_run_or_none(db, context.tenant_id, run.id)
     assert refreshed is not None
     return EvaluationRunResponse.model_validate(refreshed)

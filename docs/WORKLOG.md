@@ -1,6 +1,19 @@
 # Worklog
 
 ## 2026-03-23
+- `sdr`: o laboratório de `Knowledge Ops` quebrou porque a stack de produção não tem worker/Redis e o backend estava chamando `delay()` com `localhost:6379`.
+- O que mudou nesta passada:
+  - ingestão e avaliação ganharam fallback para execução local em background quando `REDIS_URL` não estiver configurada
+  - as tasks Celery foram preservadas, mas agora o backend pode operar sem broker nessa stack
+  - o problema de `Clients` com `HttpUrl` já havia sido corrigido na mesma linha
+- Validação executada:
+  - `python3 -m py_compile backend/app/api/v1/knowledge/routes.py backend/app/workers/tasks/ingestion.py backend/app/workers/tasks/evaluation.py` -> ok
+- Status atual:
+  - correção pronta para publicar
+- Próximo passo recomendado:
+  - redeploy da stack `sdr` e smoke das ações de `Knowledge Ops`
+
+## 2026-03-23
 - `sdr`: corrigi o cadastro e a gestão de `Clients` depois de um erro de tipo no backend ao persistir `website_url`.
 - O que mudou nesta passada:
   - `create_client()` e `update_client()` agora serializam o payload em `mode="json"` antes de tocar no Postgres
