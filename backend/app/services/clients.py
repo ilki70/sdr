@@ -18,7 +18,8 @@ async def list_clients(db: AsyncSession, tenant_id: str) -> list[Client]:
 
 
 async def create_client(db: AsyncSession, tenant_id: str, payload: ClientCreateRequest) -> Client:
-    client = Client(id=str(uuid4()), tenant_id=tenant_id, **payload.model_dump())
+    data = payload.model_dump(mode="json")
+    client = Client(id=str(uuid4()), tenant_id=tenant_id, **data)
     db.add(client)
     await db.commit()
     await db.refresh(client)
@@ -31,7 +32,7 @@ async def get_client_or_none(db: AsyncSession, tenant_id: str, client_id: str) -
 
 
 async def update_client(db: AsyncSession, client: Client, payload: ClientUpdateRequest) -> Client:
-    for key, value in payload.model_dump(exclude_none=True).items():
+    for key, value in payload.model_dump(exclude_none=True, mode="json").items():
         setattr(client, key, value)
     await db.commit()
     await db.refresh(client)

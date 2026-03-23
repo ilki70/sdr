@@ -1,6 +1,21 @@
 # Worklog
 
 ## 2026-03-23
+- `sdr`: corrigi o cadastro e a gestão de `Clients` depois de um erro de tipo no backend ao persistir `website_url`.
+- O que mudou nesta passada:
+  - `create_client()` e `update_client()` agora serializam o payload em `mode="json"` antes de tocar no Postgres
+  - a tela `/clients` passou a suportar criação, seleção, edição e exclusão em um fluxo único
+  - o formulário agora mostra o cliente selecionado com detalhes, status e confirmação antes de excluir
+- Validação executada:
+  - `python3 -m py_compile backend/app/services/clients.py` -> ok
+  - `PATH=/home/ilki/.nvm/versions/node/v20.20.1/bin:$PATH npm run typecheck` -> ok
+  - `PATH=/home/ilki/.nvm/versions/node/v20.20.1/bin:$PATH npm run build` -> ok
+- Status atual:
+  - correção pronta e publicada localmente
+- Próximo passo recomendado:
+  - smoke autenticado em `/clients` para validar criação, edição e exclusão com dados reais
+
+## 2026-03-23
 - `sdr`: a tela de `Products` foi publicada com CRUD funcional em produção.
 - O que mudou nesta passada:
   - a página `/products` passou a permitir criar, selecionar, editar e excluir produtos
