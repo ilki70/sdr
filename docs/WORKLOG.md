@@ -1,6 +1,20 @@
 # Worklog
 
 ## 2026-03-23
+- `sdr`: corrigi a tela de `Products` para suportar gestão completa de produto no frontend.
+- O que mudou nesta passada:
+  - a página `/products` passou a ter fluxo de criação, seleção, edição e exclusão
+  - o painel agora lista produtos por cliente e mostra estado, versão, preço e timestamps
+  - a edição ficou explícita no produto selecionado, com confirmação antes de excluir
+- Validação executada:
+  - `PATH=/home/ilki/.nvm/versions/node/v20.20.1/bin:$PATH npm run typecheck` -> ok
+  - `PATH=/home/ilki/.nvm/versions/node/v20.20.1/bin:$PATH npm run build` -> ok
+- Status atual:
+  - mudança pronta localmente e validada no frontend
+- Próximo passo recomendado:
+  - publicar a correção e fazer um smoke rápido na tela de produtos em produção
+
+## 2026-03-23
 - `sdr`: encontrei um erro no primeiro treino da Márcia em produção causado por `evaluation_runs.error_message` ficar curto demais para armazenar o traceback completo.
 - O que mudou nesta passada:
   - `mark_evaluation_finished()` e `mark_job_finished()` agora compactam mensagens de erro antes de gravar no banco
