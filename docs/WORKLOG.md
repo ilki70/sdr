@@ -1,5 +1,18 @@
 # Worklog
 
+## 2026-03-23
+- `sdr`: o treinamento da Márcia foi publicado em produção e recebeu uma correção pequena de hidratação da seleção do agente na página `/training`.
+- O que mudou nesta passada:
+  - commit `91d2a70` corrige a leitura do `agentId` ao abrir a tela de treino via link direto a partir de `Agents`
+  - a stack `sdr` foi reaplicada no Portainer com `pullImage=true`
+  - os serviços voltaram a convergir para os novos digests do `ghcr.io/ilki70/sdr/{backend,frontend,whatsapp-gateway}:latest`
+  - `https://pulse.orfi.com.br/health` respondeu `200`
+  - a rota `/training` respondeu `200` no frontend publicado
+- Status atual:
+  - trainer disponível em produção e link direto funcionando
+- Próximo passo recomendado:
+  - rodar um ciclo real com a persona da Márcia e calibrar os cenários de treino com base nas respostas geradas
+
 ## 2026-03-22
 - `sdr`: adicionado um fluxo de treinamento para o agente vinculado a uma persona, com foco no primeiro atendimento da Márcia.
 - O que entrou:
