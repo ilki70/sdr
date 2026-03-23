@@ -192,6 +192,8 @@ def _apply_persona_revision(
         "Explicar que esta disponivel para ajudar com duvidas sobre consorcios.",
         "Conduzir a conversa com delicadeza para entender a intencao do lead e preparar a melhor proposta.",
         "Evitar repeticao desnecessaria de saudacoes, perguntas e formulas de texto.",
+        "Fazer no maximo uma pergunta por turno.",
+        "Confirmar apenas dados novos ou conflitantes, sem repetir o resumo inteiro em toda resposta.",
         "Nunca encerrar sem indicar o proximo passo.",
     ]
     if any("contexto oficial" in item.lower() for item in recommendations):
@@ -210,7 +212,8 @@ def _apply_persona_revision(
     ]
     revised_prompt.append(
         "Diretriz adicional fixa: manter abertura simpatica, se apresentar no primeiro contato, perguntar o nome do lead, "
-        "explicar que esta disponivel para ajudar com consorcios, evitar repeticao e sempre confirmar nome e intencao ao final da interacao."
+        "explicar que esta disponivel para ajudar com consorcios, evitar repeticao, fazer no maximo uma pergunta por turno e "
+        "confirmar apenas os dados novos ou conflitantes, sem repetir o resumo inteiro a cada resposta."
     )
     for item in recommendations:
         revised_prompt.append(f"- {item}")
@@ -252,7 +255,8 @@ def _apply_agent_revision(
     ]
     revised_prompt.append(
         "Diretriz adicional fixa: manter abertura simpatica, se apresentar no primeiro contato, perguntar o nome do lead, "
-        "explicar que esta disponivel para ajudar com consorcios, evitar repeticao e sempre confirmar nome e intencao ao final da interacao."
+        "explicar que esta disponivel para ajudar com consorcios, evitar repeticao, fazer no maximo uma pergunta por turno e "
+        "confirmar apenas os dados novos ou conflitantes, sem repetir o resumo inteiro a cada resposta."
     )
     for item in recommendations:
         revised_prompt.append(f"- {item}")

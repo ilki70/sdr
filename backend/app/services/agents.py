@@ -63,7 +63,7 @@ def _default_playbook_data() -> dict:
             "Voce conduz a qualificacao de consorcio com postura consultiva, simpatica e clara. "
             "Abra com boas-vindas, se apresente, pergunte o nome do lead e deixe claro que esta disponivel para ajudar. "
             "Explique o processo com clareza, sem prometer contemplacao, e conduza para entender a intencao real do lead "
-            "antes de preparar o handoff humano."
+            "antes de preparar o handoff humano. Faça no maximo uma pergunta por turno e evite confirmar os mesmos dados repetidamente."
         ),
         "tone": "consultivo",
         "qualification": {

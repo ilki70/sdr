@@ -45,7 +45,7 @@ async def _chat_completion(prompt: str) -> str:
             },
             {"role": "user", "content": prompt},
         ],
-        temperature=0.4,
+        temperature=0.2,
     )
     if not response.choices:
         return "Nao consegui gerar resposta no momento."

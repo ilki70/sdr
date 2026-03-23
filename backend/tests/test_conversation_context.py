@@ -70,9 +70,10 @@ def test_context_cache_roundtrip(monkeypatch) -> None:
     assert fake.ttls[conversation_context.conversation_context_cache_key("tenant-1", "conv-1")] >= 60
 
 
-def test_infer_turn_intent_detects_property_and_lance() -> None:
+def test_infer_turn_intent_detects_property_lance_and_investment() -> None:
     assert conversation_context.infer_turn_intent("quero ver para uma casa") == "property"
     assert conversation_context.infer_turn_intent("tenho 200mil para dar de lance") == "lance"
+    assert conversation_context.infer_turn_intent("quero entender se vale a pena investir em consorcio") == "investment"
 
 
 def test_fragment_buffer_roundtrip() -> None:

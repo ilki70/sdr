@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 import unicodedata
 
@@ -138,6 +140,22 @@ def _build_conversation_memory(history: list[dict[str, str]], current_message: s
     }
 
 
+def _build_conversation_delta(previous: dict[str, str], current: dict[str, str]) -> list[str]:
+    labels = {
+        "property_type": "tipo_de_imovel",
+        "property_value": "valor_do_imovel",
+        "timeline": "prazo",
+        "lance": "lance",
+    }
+    delta: list[str] = []
+    for key, label in labels.items():
+        before = previous.get(key, "nao informado")
+        after = current.get(key, "nao informado")
+        if after != "nao informado" and after != before:
+            delta.append(f"{label}={after}")
+    return delta
+
+
 def _enforce_grounding_rules(state: AgentState) -> None:
     reply = state.draft_reply
     folded_reply = _fold(reply)
@@ -230,6 +248,8 @@ def _build_follow_up_suggestion(state: AgentState, persona: dict[str, str] | Non
         core = "Qual faixa de parcela cabe hoje no seu orcamento para eu montar a melhor simulacao?"
     elif "adesao" in query or "contrato" in query:
         core = "Se fizer sentido, eu posso te orientar agora no proximo passo da proposta e contrato digital."
+    elif state.intent == "investment" or any(term in query for term in ["investir", "investimento", "vale a pena", "retorno"]):
+        core = "Me diga o objetivo do investimento, o valor do bem e o prazo desejado para eu alinhar a melhor proposta."
     elif "seminovo" in query or "carro" in query:
         core = "Me diga o veiculo desejado, ano e faixa de valor para eu direcionar a simulacao."
     elif memory["property_type"] in {"casa", "imovel", "apartamento", "sobrado", "terreno"}:
@@ -250,7 +270,9 @@ def _build_first_touch_style_guidance(state: AgentState) -> str:
         "Mantenha um tom simpatico, acolhedor e educado.",
         "Evite repetir a mesma saudacao, a mesma pergunta ou a mesma formula de texto em turnos consecutivos.",
         "Nao altere a ordem atual de coleta de dados; apenas deixe a conversa mais natural e humana.",
-        "Sempre que houver dados novos, confirme de forma breve o nome do lead e a sua intencao antes de seguir.",
+        "Use o nome do lead com parcimonia; nao repita o nome em toda resposta.",
+        "Faça no maximo uma pergunta por turno.",
+        "Confirme somente os dados novos que chegaram nesta rodada, em uma frase curta, sem repetir o resumo completo.",
     ]
     if not has_assistant_turn:
         guidance.insert(
@@ -291,12 +313,14 @@ async def _get_agent_runtime_context(state: AgentState) -> dict[str, str]:
 
 
 async def classify_intent(state: AgentState) -> AgentState:
-    text = state.message_text.lower()
-    if any(word in text for word in ["casa", "imovel", "imóvel", "apartamento", "sobrado", "terreno"]):
+    text = _fold(state.message_text)
+    if any(word in text for word in ["casa", "imovel", "apartamento", "sobrado", "terreno"]):
         state.intent = "property"
+    elif any(word in text for word in ["investir", "investimento", "vale a pena", "retorno", "aplicar", "aplicacao"]):
+        state.intent = "investment"
     elif "lance" in text:
         state.intent = "lance"
-    elif any(word in text for word in ["preco", "valor", "custo", "orcamento", "orçamento", "parcela"]):
+    elif any(word in text for word in ["preco", "valor", "custo", "orcamento", "parcela"]):
         state.intent = "price"
     elif any(word in text for word in ["duvida", "como funciona"]):
         state.intent = "question"
@@ -332,7 +356,10 @@ async def compose_reply(state: AgentState) -> AgentState:
             conversation_id=state.conversation_id or "unknown",
             last_intent=state.intent,
         )
+    previous_memory = _build_conversation_memory(state.conversation_history, "")
     memory = _build_conversation_memory(state.conversation_history, state.message_text)
+    new_facts = _build_conversation_delta(previous_memory, memory)
+    new_facts_block = ", ".join(new_facts) if new_facts else "nenhum dado novo estruturado"
     runtime = await _get_agent_runtime_context(state)
     structured_context_block = format_conversation_context_for_prompt(cached_context)
     media_block = " | ".join(state.media_context) if state.media_context else "sem midia"
@@ -353,6 +380,10 @@ async def compose_reply(state: AgentState) -> AgentState:
         "Nao volte a pedir informacoes ja informadas na memoria da conversa. "
         "Se o lead enviar apenas um numero ou valor curto, trate como atualizacao do campo mais provavel ja discutido na conversa. "
         "Se a conversa ja tiver valor do bem, prazo e lance, consolide esses dados e avance para simulacao ou proposta, sem recomeçar a qualificacao. "
+        f"Dados novos desta rodada={new_facts_block}. "
+        "Se houver dado novo, confirme apenas esse dado, sem refazer todo o resumo e sem reapresentar o proprio nome. "
+        "Se nao houver dado novo, nao comece com confirmacao; avance com uma pergunta ou um proximo passo util. "
+        "Nunca faça mais de uma pergunta por resposta. "
         f"Contexto estruturado do Redis={structured_context_block}. "
         f"Midia processada={media_block}. "
         "Sempre tente conduzir o lead para o proximo passo concreto, como simulacao, adesao ou envio de proposta. "

@@ -138,6 +138,8 @@ def infer_turn_intent(text: str) -> str:
     folded = "".join(char for char in normalized if not unicodedata.combining(char))
     if any(word in folded for word in ["casa", "imovel", "apartamento", "sobrado", "terreno"]):
         return "property"
+    if any(word in folded for word in ["investir", "investimento", "vale a pena", "retorno", "aplicar", "aplicacao", "aplicação"]):
+        return "investment"
     if "lance" in folded:
         return "lance"
     if any(word in folded for word in ["preco", "valor", "custo", "orcamento", "parcela"]):

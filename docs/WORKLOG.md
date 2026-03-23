@@ -1,6 +1,22 @@
 # Worklog
 
 ## 2026-03-23
+- `sdr`: refinei de novo o comportamento da Márcia para reduzir repetição e melhorar a leitura de intenção.
+- O que mudou nesta passada:
+  - a classificação de intenção agora reconhece explicitamente mensagens de investimento/vale a pena como `investment`
+  - o prompt de resposta passou a impor no maximo uma pergunta por turno e a confirmar apenas dados novos, sem repetir o resumo completo
+  - a diretriz de treino da persona/agente foi alinhada para nao incentivar confirmacao repetitiva
+  - a temperatura do gerador de respostas foi reduzida para diminuir eco e verbosidade
+  - alguns modulos receberam `from __future__ import annotations` para permitir importacao dos testes nesse host com Python 3.9
+- Validação executada:
+  - `python3 -m py_compile backend/app/agents/nodes.py backend/app/agents/state.py backend/app/agents/tools.py backend/app/schemas/agents.py backend/app/schemas/messages.py backend/app/services/conversation_context.py backend/app/services/messages.py backend/app/services/training.py backend/app/services/agents.py backend/app/services/llm.py backend/tests/test_agent_memory.py backend/tests/test_conversation_context.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_agent_memory.py backend/tests/test_conversation_context.py` -> `7 passed`
+- Status atual:
+  - ajuste local pronto para publicar
+- Próximo passo recomendado:
+  - commit/push e redeploy da stack `sdr`, depois repetir a simulacao da Márcia para confirmar menos repetição
+
+## 2026-03-23
 - `sdr`: ajustei o comportamento da Márcia para um primeiro atendimento mais simpático e humano.
 - O que mudou nesta passada:
   - o prompt de resposta agora pede boas-vindas, apresentação, pergunta pelo nome do lead e oferta de ajuda sobre consórcios

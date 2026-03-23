@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from app.services.vector_store import search_rag_context
 from app.core.db import SessionLocal
 from app.services.knowledge import search_allowlisted_sources
