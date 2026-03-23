@@ -1,6 +1,20 @@
 # Worklog
 
 ## 2026-03-23
+- `sdr`: ajustei o comportamento da Márcia para um primeiro atendimento mais simpático e humano.
+- O que mudou nesta passada:
+  - o prompt de resposta agora pede boas-vindas, apresentação, pergunta pelo nome do lead e oferta de ajuda sobre consórcios
+  - a conversa passa a evitar repetição de saudação, pergunta e formulação
+  - o treinador de persona/agente passou a reforçar essa diretriz nas revisões automáticas
+  - a descrição base do playbook de consórcios foi alinhada com essa postura
+- Validação executada:
+  - `python3 -m py_compile backend/app/agents/nodes.py backend/app/services/agents.py backend/app/services/training.py` -> ok
+- Status atual:
+  - ajuste pronto para publicar
+- Próximo passo recomendado:
+  - commit/push e redeploy da stack `sdr`, depois smoke da conversa da Márcia
+
+## 2026-03-23
 - `sdr`: o laboratório de `Knowledge Ops` quebrou porque a stack de produção não tem worker/Redis e o backend estava chamando `delay()` com `localhost:6379`.
 - O que mudou nesta passada:
   - ingestão e avaliação ganharam fallback para execução local em background quando `REDIS_URL` não estiver configurada
@@ -9,9 +23,9 @@
 - Validação executada:
   - `python3 -m py_compile backend/app/api/v1/knowledge/routes.py backend/app/workers/tasks/ingestion.py backend/app/workers/tasks/evaluation.py` -> ok
 - Status atual:
-  - correção pronta para publicar
+  - correção publicada; o backend da stack `sdr` já está no novo digest e o `UpdateStatus` do serviço concluiu com sucesso
 - Próximo passo recomendado:
-  - redeploy da stack `sdr` e smoke das ações de `Knowledge Ops`
+  - smoke funcional do laboratório de conhecimento com uma ingestão real
 
 ## 2026-03-23
 - `sdr`: corrigi o cadastro e a gestão de `Clients` depois de um erro de tipo no backend ao persistir `website_url`.

@@ -60,8 +60,10 @@ async def list_agent_versions(db: AsyncSession, tenant_id: str, agent_id: str) -
 def _default_playbook_data() -> dict:
     return {
         "positioning": (
-            "Voce conduz a qualificacao de consorcio com postura consultiva, "
-            "explicando o processo com clareza, sem prometer contemplacao e preparando o handoff humano."
+            "Voce conduz a qualificacao de consorcio com postura consultiva, simpatica e clara. "
+            "Abra com boas-vindas, se apresente, pergunte o nome do lead e deixe claro que esta disponivel para ajudar. "
+            "Explique o processo com clareza, sem prometer contemplacao, e conduza para entender a intencao real do lead "
+            "antes de preparar o handoff humano."
         ),
         "tone": "consultivo",
         "qualification": {

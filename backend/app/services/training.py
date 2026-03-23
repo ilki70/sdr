@@ -187,7 +187,11 @@ def _apply_persona_revision(
     focus: str,
 ) -> PersonaVersionCreateRequest:
     added_rules = [
-        "Responder com tom consultivo, claro e prático.",
+        "Responder com tom consultivo, claro, simpatico e pratico.",
+        "Abrir o primeiro atendimento com boas-vindas, apresentacao e pergunta sobre o nome do lead.",
+        "Explicar que esta disponivel para ajudar com duvidas sobre consorcios.",
+        "Conduzir a conversa com delicadeza para entender a intencao do lead e preparar a melhor proposta.",
+        "Evitar repeticao desnecessaria de saudacoes, perguntas e formulas de texto.",
         "Nunca encerrar sem indicar o proximo passo.",
     ]
     if any("contexto oficial" in item.lower() for item in recommendations):
@@ -204,6 +208,10 @@ def _apply_persona_revision(
         "",
         f"Ajustes do ciclo {cycle_no} para foco em {_focus_label(focus)}:",
     ]
+    revised_prompt.append(
+        "Diretriz adicional fixa: manter abertura simpatica, se apresentar no primeiro contato, perguntar o nome do lead, "
+        "explicar que esta disponivel para ajudar com consorcios, evitar repeticao e sempre confirmar nome e intencao ao final da interacao."
+    )
     for item in recommendations:
         revised_prompt.append(f"- {item}")
     revised_prompt.append("- Manter o texto em portugues do Brasil.")
@@ -242,6 +250,10 @@ def _apply_agent_revision(
         "",
         f"Atualizacao de treino do ciclo {cycle_no} para {_focus_label(focus)}:",
     ]
+    revised_prompt.append(
+        "Diretriz adicional fixa: manter abertura simpatica, se apresentar no primeiro contato, perguntar o nome do lead, "
+        "explicar que esta disponivel para ajudar com consorcios, evitar repeticao e sempre confirmar nome e intencao ao final da interacao."
+    )
     for item in recommendations:
         revised_prompt.append(f"- {item}")
     revised_prompt.append("- Priorizar respostas praticas, com tom humano e proximo passo sempre claro.")

@@ -244,6 +244,32 @@ def _build_follow_up_suggestion(state: AgentState, persona: dict[str, str] | Non
     return f"Para eu te orientar melhor: {core}"
 
 
+def _build_first_touch_style_guidance(state: AgentState) -> str:
+    has_assistant_turn = any(item.get("role") == "assistant" for item in state.conversation_history)
+    guidance = [
+        "Mantenha um tom simpatico, acolhedor e educado.",
+        "Evite repetir a mesma saudacao, a mesma pergunta ou a mesma formula de texto em turnos consecutivos.",
+        "Nao altere a ordem atual de coleta de dados; apenas deixe a conversa mais natural e humana.",
+        "Sempre que houver dados novos, confirme de forma breve o nome do lead e a sua intencao antes de seguir.",
+    ]
+    if not has_assistant_turn:
+        guidance.insert(
+            0,
+            (
+                "Se esta for a primeira resposta do atendimento, cumprimente, se apresente como Marcia, "
+                "pergunte o nome do lead e diga que esta disponivel para ajudar com duvidas sobre consorcios."
+            ),
+        )
+        guidance.insert(
+            1,
+            (
+                "Depois da abertura, conduza com delicadeza para entender o que o lead pretende "
+                "para que a melhor proposta possa ser preparada."
+            ),
+        )
+    return " ".join(guidance)
+
+
 async def _get_agent_runtime_context(state: AgentState) -> dict[str, str]:
     persona = await get_persona_context_for_agent(state.tenant_id, state.agent_id)
     async with SessionLocal() as session:
@@ -322,6 +348,7 @@ async def compose_reply(state: AgentState) -> AgentState:
         "Atue como atendente comercial consultivo configuravel. "
         "Priorize o playbook publicado do agente e as paginas oficiais do cliente quando estiverem no contexto. "
         "Use apenas fatos sustentados pelo contexto oficial recuperado. "
+        f"{_build_first_touch_style_guidance(state)} "
         "Se faltar dado, deixe claro e faca uma pergunta objetiva. "
         "Nao volte a pedir informacoes ja informadas na memoria da conversa. "
         "Se o lead enviar apenas um numero ou valor curto, trate como atualizacao do campo mais provavel ja discutido na conversa. "
