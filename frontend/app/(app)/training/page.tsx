@@ -84,12 +84,7 @@ const focusOptions = [
 export default function TrainingPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [personas, setPersonas] = useState<Persona[]>([]);
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-    return new URLSearchParams(window.location.search).get("agentId");
-  });
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   const [cycles, setCycles] = useState(1);
   const [interactionsPerCycle, setInteractionsPerCycle] = useState(4);
@@ -133,7 +128,8 @@ export default function TrainingPage() {
   }
 
   useEffect(() => {
-    void loadData();
+    const initialAgentId = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("agentId");
+    void loadData(initialAgentId || undefined);
   }, []);
 
   async function handleRunTraining(event: FormEvent<HTMLFormElement>) {
