@@ -1,6 +1,17 @@
 # Worklog
 
 ## 2026-03-23
+- `sdr`: encontrei um erro no primeiro treino da Márcia em produção causado por `evaluation_runs.error_message` ficar curto demais para armazenar o traceback completo.
+- O que mudou nesta passada:
+  - `mark_evaluation_finished()` e `mark_job_finished()` agora compactam mensagens de erro antes de gravar no banco
+  - a resposta final do trainer deixou de depender de `EvaluationRunResponse.model_validate()` em cima de ORM possivelmente expirado e passou a usar um build explícito do objeto refrescado
+  - a compilação local dos módulos alterados passou com `python3 -m py_compile`
+- Status atual:
+  - correção local pronta para publicar
+- Próximo passo recomendado:
+  - redeploy da stack `sdr` e repetir o treino da Márcia para validar o caminho feliz e o caminho de falha
+
+## 2026-03-23
 - `sdr`: o treinamento da Márcia foi publicado em produção e recebeu uma correção pequena de hidratação da seleção do agente na página `/training`.
 - O que mudou nesta passada:
   - commit `91d2a70` corrige a leitura do `agentId` ao abrir a tela de treino via link direto a partir de `Agents`

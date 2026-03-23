@@ -9,6 +9,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.time import utcnow_naive
 from app.models.entities import EvaluationRun, KnowledgeJob, KnowledgeSourceVersion
 
+MAX_ERROR_MESSAGE_LENGTH = 255
+
+
+def _compact_error_message(error_message: str | None) -> str | None:
+    if error_message is None:
+        return None
+
+    normalized = " ".join(error_message.split())
+    if len(normalized) <= MAX_ERROR_MESSAGE_LENGTH:
+        return normalized
+
+    return normalized[: MAX_ERROR_MESSAGE_LENGTH - 3].rstrip() + "..."
+
 
 async def create_knowledge_job(
     db: AsyncSession,
@@ -78,7 +91,7 @@ async def mark_job_finished(
 ) -> None:
     job.status = status
     job.result_json = result_json
-    job.error_message = error_message
+    job.error_message = _compact_error_message(error_message)
     job.finished_at = utcnow_naive()
     if source_id:
         job.source_id = source_id
@@ -200,6 +213,6 @@ async def mark_evaluation_finished(
     run.status = status
     run.summary_json = summary_json
     run.report_markdown = report_markdown
-    run.error_message = error_message
+    run.error_message = _compact_error_message(error_message)
     run.finished_at = utcnow_naive()
     await db.commit()

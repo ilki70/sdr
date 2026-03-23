@@ -95,6 +95,25 @@ def _merge_unique(existing: list[str], additions: list[str]) -> list[str]:
     return merged
 
 
+def _evaluation_run_response(run: EvaluationRun) -> EvaluationRunResponse:
+    return EvaluationRunResponse(
+        id=run.id,
+        tenant_id=run.tenant_id,
+        product_id=run.product_id,
+        created_by_user_id=run.created_by_user_id,
+        evaluation_type=run.evaluation_type,
+        status=run.status,
+        summary_json=run.summary_json,
+        report_markdown=run.report_markdown,
+        error_message=run.error_message,
+        celery_task_id=run.celery_task_id,
+        started_at=run.started_at,
+        finished_at=run.finished_at,
+        created_at=run.created_at,
+        updated_at=run.updated_at,
+    )
+
+
 def _focus_label(focus: str) -> str:
     labels = {
         "first_attendance": "primeiro atendimento",
@@ -504,10 +523,9 @@ async def run_agent_training(
             summary_json=summary_json,
             report_markdown=report_markdown,
         )
-        refreshed = await db.get(EvaluationRun, run.id)
-        assert refreshed is not None
+        await db.refresh(run)
         return AgentTrainingResponse(
-            evaluation_run=EvaluationRunResponse.model_validate(refreshed),
+            evaluation_run=_evaluation_run_response(run),
             agent=await _agent_response(db, tenant_id, agent.id),
             persona=await _persona_response(db, tenant_id, current_persona_version.persona_id if current_persona_version else None),
             cycles=cycles,
