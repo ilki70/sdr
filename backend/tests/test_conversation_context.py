@@ -96,3 +96,27 @@ def test_fragment_buffer_roundtrip() -> None:
     assert not conversation_context.is_fragment_like("quero ver para uma casa")
     assert not conversation_context.is_fragment_like("oi")
     assert not conversation_context.is_fragment_like("casa")
+
+
+def test_build_conversation_context_snapshot_maps_short_numeric_reply_to_lance_when_prompted() -> None:
+    messages = [
+        {"role": "user", "content": "quero uma moto"},
+        {"role": "assistant", "content": "Qual seria o valor aproximado da moto que voce tem em mente?"},
+        {"role": "user", "content": "25mil"},
+        {"role": "assistant", "content": "Qual o prazo ideal para voce realizar esse consorcio?"},
+        {"role": "user", "content": "80 meses"},
+        {"role": "assistant", "content": "Voce ja tem em mente qual valor de lance pretende oferecer no consorcio?"},
+        {"role": "user", "content": "10mil"},
+    ]
+
+    snapshot = conversation_context.build_conversation_context_snapshot(
+        messages,
+        tenant_id="tenant-1",
+        conversation_id="conv-2",
+        last_intent="property",
+    )
+
+    assert snapshot.property_type == "moto"
+    assert snapshot.property_value == "R$ 25mil"
+    assert snapshot.timeline == "80 meses"
+    assert snapshot.lance == "R$ 10mil"

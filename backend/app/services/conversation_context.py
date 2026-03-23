@@ -103,12 +103,35 @@ def _extract_timeline(text: str) -> str | None:
     return None
 
 
+def _looks_like_timeline_answer(text: str) -> bool:
+    import unicodedata
+
+    normalized = unicodedata.normalize("NFKD", text.lower())
+    folded = "".join(char for char in normalized if not unicodedata.combining(char))
+    return any(term in folded for term in ["mes", "meses", "ano", "anos", "semana", "semanas", "dia", "dias"])
+
+
 def _extract_property_type(text: str) -> str | None:
     import unicodedata
 
     normalized = unicodedata.normalize("NFKD", text.lower())
     folded = "".join(char for char in normalized if not unicodedata.combining(char))
-    if any(term in folded for term in ["casa", "imovel", "apartamento", "sobrado", "terreno"]):
+    if any(
+        term in folded
+        for term in [
+            "casa",
+            "imovel",
+            "apartamento",
+            "sobrado",
+            "terreno",
+            "moto",
+            "motocicleta",
+            "carro",
+            "veiculo",
+            "caminhao",
+            "caminhonete",
+        ]
+    ):
         if "casa" in folded:
             return "casa"
         if "apartamento" in folded:
@@ -117,6 +140,16 @@ def _extract_property_type(text: str) -> str | None:
             return "sobrado"
         if "terreno" in folded:
             return "terreno"
+        if "moto" in folded or "motocicleta" in folded:
+            return "moto"
+        if "caminhonete" in folded:
+            return "caminhonete"
+        if "caminhao" in folded:
+            return "caminhao"
+        if "carro" in folded:
+            return "carro"
+        if "veiculo" in folded:
+            return "veiculo"
         return "imovel"
     return None
 
@@ -131,12 +164,35 @@ def _extract_lance(text: str) -> str | None:
     return _extract_amount(text)
 
 
+def _infer_expected_slot(messages: list[dict[str, str]]) -> str | None:
+    last_assistant_message = next(
+        (item.get("content", "") for item in reversed(messages) if item.get("role") == "assistant" and item.get("content")),
+        "",
+    )
+    if not last_assistant_message:
+        return None
+
+    import unicodedata
+
+    normalized = unicodedata.normalize("NFKD", last_assistant_message.lower())
+    folded = "".join(char for char in normalized if not unicodedata.combining(char))
+    if "lance" in folded:
+        return "lance"
+    if "prazo" in folded or "meses" in folded or "anos" in folded:
+        return "timeline"
+    if "valor" in folded or "faixa de valor" in folded or "quanto" in folded:
+        return "property_value"
+    if "tipo de imovel" in folded or "qual bem" in folded or "qual veiculo" in folded:
+        return "property_type"
+    return None
+
+
 def infer_turn_intent(text: str) -> str:
     import unicodedata
 
     normalized = unicodedata.normalize("NFKD", text.lower())
     folded = "".join(char for char in normalized if not unicodedata.combining(char))
-    if any(word in folded for word in ["casa", "imovel", "apartamento", "sobrado", "terreno"]):
+    if any(word in folded for word in ["casa", "imovel", "apartamento", "sobrado", "terreno", "moto", "carro", "veiculo"]):
         return "property"
     if any(word in folded for word in ["investir", "investimento", "vale a pena", "retorno", "aplicar", "aplicacao", "aplicação"]):
         return "investment"
@@ -215,12 +271,16 @@ def build_conversation_context_snapshot(
     lance: str | None = None
     summary_parts: list[str] = []
     turn_count = 0
+    expected_slot = None
 
     for item in messages:
         content = item.get("content", "")
         if not content:
             continue
         role = item.get("role", "user")
+        if role == "assistant":
+            expected_slot = _infer_expected_slot([item])
+            continue
         if role == "user":
             turn_count += 1
             extracted_type = _extract_property_type(content)
@@ -236,8 +296,16 @@ def build_conversation_context_snapshot(
                 lance = extracted_lance
 
             extracted_value = _extract_amount(content)
-            if extracted_value and "lance" not in content.lower():
-                property_value = extracted_value
+            lowered = content.lower()
+            if extracted_value:
+                if "lance" in lowered:
+                    lance = extracted_value
+                elif expected_slot == "lance":
+                    lance = extracted_value
+                elif expected_slot == "property_value":
+                    property_value = extracted_value
+                elif "lance" not in lowered and not _looks_like_timeline_answer(content):
+                    property_value = extracted_value
 
             if any(term in content.lower() for term in ["quero", "gostaria", "objetivo", "pretendo", "quero ver", "quero comprar"]):
                 summary_parts.append(_clean_text(content))

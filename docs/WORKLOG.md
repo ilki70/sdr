@@ -1,6 +1,21 @@
 # Worklog
 
 ## 2026-03-23
+- `sdr`: corrigi a perda de contexto da Márcia quando o lead responde com valores curtos em sequência.
+- O que mudou nesta passada:
+  - a memória e o snapshot de conversa agora inferem o slot esperado a partir da última pergunta do assistente
+  - respostas como `10mil` depois de uma pergunta sobre lance passam a alimentar `lance`, sem sobrescrever o valor do bem
+  - o parser passou a reconhecer `moto`, `carro`, `veiculo` e afins como tipo de bem
+  - respostas de prazo como `80 meses` deixaram de ser tratadas como valor monetário
+- Validação executada:
+  - `python3 -m py_compile backend/app/agents/nodes.py backend/app/services/conversation_context.py backend/tests/test_agent_memory.py backend/tests/test_conversation_context.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_agent_memory.py backend/tests/test_conversation_context.py` -> `9 passed`
+- Status atual:
+  - ajuste local pronto para publicar
+- Próximo passo recomendado:
+  - publicar e repetir a conversa da Márcia com sequências curtas de qualificacao
+
+## 2026-03-23
 - `sdr`: refinei de novo o comportamento da Márcia para reduzir repetição e melhorar a leitura de intenção.
 - O que mudou nesta passada:
   - a classificação de intenção agora reconhece explicitamente mensagens de investimento/vale a pena como `investment`
