@@ -1,6 +1,23 @@
 # Worklog
 
 ## 2026-03-24
+- `sdr`: fechei o pacote de captura de lead + autoaprendizado com commit local e rollout direto no Swarm.
+- O que mudou nesta passada:
+  - commit local `04110b8` com as mudancas de captura obrigatoria de lead, handoff humano, memoria e historico/reversao de melhorias no `Training`
+  - backend e frontend foram buildados no Docker proxy do Portainer com as tags `sdr-backend:prod-20260324-04110b8` e `sdr-frontend:prod-20260324-04110b8`
+  - a stack `sdr` foi reaplicada com as imagens novas e ambos os services convergiram com `update completed`
+  - executei `alembic upgrade head` dentro do container novo do backend apos o rollout
+- Validacao executada:
+  - `python3 -m py_compile ...` dos arquivos backend alterados -> ok
+  - `npm run build` no frontend com Node 20 -> ok
+  - `npm run typecheck` com Node 20 falhou por artefato gerado em `.next/types/validator.ts` apontando para `./routes.js`
+  - `https://pulse.orfi.com.br/health` -> `ok`
+- Observacao operacional:
+  - o `push` para `origin/main` ficou bloqueado neste shell por falta de credencial GitHub HTTPS (`could not read Username for 'https://github.com'`)
+- Proximo passo recomendado:
+  - validar manualmente em producao os fluxos de `/conversations`, `/training` e `agent-lab`, e depois empurrar o commit `04110b8` para o GitHub a partir de um shell com credencial configurada
+
+## 2026-03-24
 - `sdr`: criei um ciclo de autoaprendizado auditável a partir das conversas reais e corrigi a persistência de contexto do Agent Lab.
 - O que mudou nesta passada:
   - o Agent Lab passou a capturar `nome completo`, `CPF` e `telefone` antes de gerar a resposta, igual ao fluxo de WhatsApp
