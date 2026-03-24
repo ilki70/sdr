@@ -22,3 +22,4 @@ PyMySQL
 tenacity
 pypdf
 youtube-transcript-api
+langgraph

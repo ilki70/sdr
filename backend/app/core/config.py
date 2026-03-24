@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     backend_internal_url: str = Field(default="http://backend:8000", alias="BACKEND_INTERNAL_URL")
     whatsapp_gateway_base_url: str = Field(default="http://whatsapp-gateway:8090", alias="WHATSAPP_GATEWAY_BASE_URL")
     whatsapp_gateway_secret: str = Field(default="", alias="WHATSAPP_GATEWAY_SECRET")
+    langgraph_runtime_enabled: bool = Field(default=False, alias="LANGGRAPH_RUNTIME_ENABLED")
 
     session_secret: str = Field(default="", alias="SESSION_SECRET")
     rate_limit_default_per_min: int = Field(default=100, alias="RATE_LIMIT_DEFAULT_PER_MIN")

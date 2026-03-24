@@ -163,6 +163,7 @@ A direção atual prioriza:
 - funil operacional por conversa
 - suporte a consorcios/Turn2C
 - handoff humano no momento certo
+- migracao do motor principal de conversa para um runtime interno stateful com `langgraph`, sem dependencia de licenca no core do produto
 
 ## Observacoes
 

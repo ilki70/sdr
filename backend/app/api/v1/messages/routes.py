@@ -1,5 +1,6 @@
 import asyncio
 import json
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -29,8 +30,10 @@ from app.services.messages import (
     list_conversations,
     list_recent_conversation_messages,
     persist_conversation_exchange,
+    persist_conversation_pipeline_fields,
     update_conversation_pipeline_status,
 )
+from app.services.runtime_router import apply_runtime_slot_projection, run_configured_sales_runtime
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 settings = get_settings()
@@ -74,6 +77,35 @@ async def _prepare_state(
         lead_profile=lead,
     )
     return state, conversation.id
+
+
+async def _run_lab_runtime(
+    db: AsyncSession,
+    context: RequestContext,
+    payload: MessageSimulateRequest,
+) -> tuple[SimpleNamespace, object, str]:
+    state, conversation_id = await _prepare_state(db, context, payload)
+    conversation = await ensure_lab_conversation(
+        db=db,
+        tenant_id=context.tenant_id,
+        conversation_id=conversation_id,
+        agent_id=payload.agent_id,
+        channel=payload.channel,
+    )
+    lead = await get_lead_for_conversation(db, conversation)
+
+    runtime_state, model_name = await run_configured_sales_runtime(
+        state=state,
+        tenant_id=context.tenant_id,
+        agent_id=conversation.agent_id,
+        lead=lead,
+        channel=payload.channel,
+        attachments=[attachment.model_dump() for attachment in payload.attachments],
+    )
+    await db.flush()
+    if model_name == "mock-llm" and settings.resolved_openai_api_key:
+        model_name = settings.openai_model
+    return runtime_state, conversation, model_name
 
 
 @router.get("/conversations", response_model=list[ConversationSummaryResponse])
@@ -139,15 +171,7 @@ async def simulate_message(
     context: RequestContext = Depends(get_request_context),
     db: AsyncSession = Depends(get_db_session),
 ) -> MessageSimulateResponse:
-    state, conversation_id = await _prepare_state(db, context, payload)
-    state = await run_sales_agent(state)
-    conversation = await ensure_lab_conversation(
-        db=db,
-        tenant_id=context.tenant_id,
-        conversation_id=conversation_id,
-        agent_id=payload.agent_id,
-        channel=payload.channel,
-    )
+    state, conversation, model_name = await _run_lab_runtime(db, context, payload)
     await persist_conversation_exchange(
         db=db,
         conversation=conversation,
@@ -155,10 +179,22 @@ async def simulate_message(
         assistant_text=state.draft_reply,
         intent=state.intent,
         confidence_score=state.confidence_score,
-        model_name=settings.openai_model if settings.resolved_openai_api_key else "mock-llm",
+        model_name=model_name,
         reply_fragments=state.reply_fragments,
         follow_up_suggestion=state.follow_up_suggestion,
     )
+    if getattr(state, "handoff_requested", False):
+        await persist_conversation_pipeline_fields(
+            db=db,
+            conversation_id=conversation.id,
+            tenant_id=context.tenant_id,
+            pipeline_status="handoff",
+            summary=state.message_text[:160],
+            next_step="Assumir atendimento humano e revisar contexto da conversa.",
+            status="waiting_human",
+            agent_id=conversation.agent_id,
+        )
+        await db.commit()
     await refresh_conversation_context_from_db(
         db,
         tenant_id=context.tenant_id,
@@ -167,7 +203,7 @@ async def simulate_message(
         media_notes=state.media_context,
     )
     return MessageSimulateResponse(
-        conversation_id=conversation_id,
+        conversation_id=conversation.id,
         intent=state.intent,
         confidence_score=state.confidence_score,
         reply=state.draft_reply,
@@ -182,15 +218,7 @@ async def stream_message(
     context: RequestContext = Depends(get_request_context),
     db: AsyncSession = Depends(get_db_session),
 ) -> StreamingResponse:
-    state, conversation_id = await _prepare_state(db, context, payload)
-    state = await run_sales_agent(state)
-    conversation = await ensure_lab_conversation(
-        db=db,
-        tenant_id=context.tenant_id,
-        conversation_id=conversation_id,
-        agent_id=payload.agent_id,
-        channel=payload.channel,
-    )
+    state, conversation, model_name = await _run_lab_runtime(db, context, payload)
     await persist_conversation_exchange(
         db=db,
         conversation=conversation,
@@ -198,10 +226,22 @@ async def stream_message(
         assistant_text=state.draft_reply,
         intent=state.intent,
         confidence_score=state.confidence_score,
-        model_name=settings.openai_model if settings.resolved_openai_api_key else "mock-llm",
+        model_name=model_name,
         reply_fragments=state.reply_fragments,
         follow_up_suggestion=state.follow_up_suggestion,
     )
+    if getattr(state, "handoff_requested", False):
+        await persist_conversation_pipeline_fields(
+            db=db,
+            conversation_id=conversation.id,
+            tenant_id=context.tenant_id,
+            pipeline_status="handoff",
+            summary=state.message_text[:160],
+            next_step="Assumir atendimento humano e revisar contexto da conversa.",
+            status="waiting_human",
+            agent_id=conversation.agent_id,
+        )
+        await db.commit()
     await refresh_conversation_context_from_db(
         db,
         tenant_id=context.tenant_id,
@@ -217,7 +257,7 @@ async def stream_message(
             await asyncio.sleep(0.03)
         yield (
             "data: "
-            f"{json.dumps({'done': True, 'intent': state.intent, 'conversation_id': conversation_id, 'reply_fragments': state.reply_fragments, 'follow_up_suggestion': state.follow_up_suggestion})}\n\n"
+            f"{json.dumps({'done': True, 'intent': state.intent, 'conversation_id': conversation.id, 'reply_fragments': state.reply_fragments, 'follow_up_suggestion': state.follow_up_suggestion})}\n\n"
         )
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

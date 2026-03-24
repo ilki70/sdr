@@ -1,6 +1,146 @@
 # Worklog
 
 ## 2026-03-24
+- `sdr`: o `langgraph_runtime` agora segura o estado de proposta/simulacao em andamento sem regredir para qualificacao.
+- O que mudou nesta passada:
+  - entrou leitura de `proposal_commitment_state` a partir do historico recente e do `pipeline_status`
+  - quando a SDR ja prometeu simulacao ou proposta, o runtime passa a responder em modo `proposal_in_progress`
+  - nesse estado, se faltar cadastro, ele pede apenas o dado cadastral faltante; se nao faltar, ele retoma a simulacao sem reiniciar perguntas
+  - corrigi tambem o caminho compilado do graph para usar o `RuntimeContext` atual em vez de funcoes antigas
+- Validacao executada:
+  - `python3 -m py_compile backend/app/services/langgraph_runtime.py backend/tests/test_langgraph_runtime.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_langgraph_runtime.py` -> `10 passed`
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_messages_langgraph_runtime.py backend/tests/test_whatsapp_gateway.py` -> `5 passed`
+- Status atual:
+  - o runtime novo ja consegue manter qualificacao, objecoes, handoff e etapa de simulacao/proposta sem reiniciar a conversa quando o compromisso ja existe
+- Proximo passo recomendado:
+  - montar simulacoes locais mais proximas dos casos reais reportados para medir onde o runtime novo ainda diverge do comportamento comercial esperado
+
+## 2026-03-24
+- `sdr`: enriqueci o `langgraph_runtime` com confirmacao curta de dados novos e tratamento deterministico de objecoes sem perder o fluxo.
+- O que mudou nesta passada:
+  - o runtime agora confirma apenas os dados novos relevantes antes da proxima pergunta, sem repetir o resumo inteiro
+  - entrou tratamento deterministico para objecoes comuns como taxa, confianca, comparacao com financiamento, lance e prazo
+  - as objecoes agora respondem o ponto do lead e em seguida retomam o slot faltante correto
+  - ajustei a ordem do fluxo para `lead_name` nao travar a qualificacao comercial quando o lead ja respondeu bem/objetivo/valor/prazo
+  - corrigi o gating de nome para evitar falso positivo em frases como `quero um imovel`
+- Validacao executada:
+  - `python3 -m py_compile backend/app/services/langgraph_runtime.py backend/tests/test_langgraph_runtime.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_langgraph_runtime.py` -> `8 passed`
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_messages_langgraph_runtime.py backend/tests/test_whatsapp_gateway.py` -> `5 passed`
+- Status atual:
+  - o runtime novo ja cobre qualificacao, gate cadastral, handoff, confirmacao curta e objecoes basicas, reaproveitando o snapshot e a estrutura atual
+- Proximo passo recomendado:
+  - consolidar transicoes de proposta e compromisso de simulacao usando o historico e o `pipeline_status`, para reduzir regressao depois que a SDR promete avancar
+
+## 2026-03-24
+- `sdr`: refatorei o `langgraph_runtime` para reaproveitar melhor a estrutura e os dados que o projeto ja mantem.
+- O que mudou nesta passada:
+  - o runtime agora le `ConversationContextSnapshot` como fonte primaria quando existir
+  - passei a reaproveitar `extracted_slots`, `current_question_slot`, `last_confirmed_slot`, `summary` e `memory_notes`
+  - o runtime tambem passou a respeitar `required_profile_fields_missing` e `pipeline_status` vindos do metadata atual
+  - a logica de follow-up ficou alinhada ao slot faltante real, usando primeiro o estado persistido e so depois heuristica local
+- Validacao executada:
+  - `python3 -m py_compile backend/app/services/langgraph_runtime.py backend/tests/test_langgraph_runtime.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_langgraph_runtime.py` -> `6 passed`
+- Status atual:
+  - o `langgraph_runtime` deixou de depender so de parser ad hoc e passou a orquestrar melhor a memoria e as pendencias ja existentes no projeto
+- Proximo passo recomendado:
+  - puxar agora objecoes e confirmacoes do fluxo legado para dentro do runtime novo, reaproveitando o mesmo snapshot e sem duplicar regras
+
+## 2026-03-24
+- `sdr`: levei o runtime novo com `langgraph` tambem para os dois inbounds de WhatsApp e centralizei a escolha do motor em um roteador unico.
+- O que mudou nesta passada:
+  - `backend/app/services/runtime_router.py` passou a concentrar a escolha entre `langgraph`, `rasa` e runtime legado
+  - `backend/app/services/langgraph_runtime.py` agora tambem aproveita o snapshot real de `conversation_context` para inicializar slots
+  - `backend/app/services/whatsapp.py` e `backend/app/services/whatsapp_gateway.py` agora usam o mesmo roteador do `agent-lab`
+  - o handoff vindo do runtime novo ja projeta `pipeline_status=handoff` e `status=waiting_human` nos fluxos de WhatsApp
+  - corrigi compatibilidade local Python 3.9 em `backend/app/schemas/whatsapp.py`
+  - ampliei a regressao para cobrir `agent-lab` e `whatsapp_gateway` no caminho novo
+- Validacao executada:
+  - `python3 -m py_compile backend/app/api/v1/messages/routes.py backend/app/schemas/whatsapp.py backend/app/services/langgraph_runtime.py backend/app/services/runtime_router.py backend/app/services/whatsapp.py backend/app/services/whatsapp_gateway.py backend/tests/test_langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_whatsapp_gateway.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_whatsapp_gateway.py` -> `8 passed`
+- Status atual:
+  - `agent-lab`, `whatsapp-service` e `whatsapp-gateway` ja conseguem compartilhar o mesmo motor novo por feature flag
+- Proximo passo recomendado:
+  - enriquecer o `langgraph_runtime` com objecoes, confirmacoes e transicoes de proposta sem depender mais do runtime legado
+
+## 2026-03-24
+- `sdr`: reorientei o plano de migracao para um runtime interno com `langgraph`, removendo Rasa do caminho principal por risco de licenca.
+- O que mudou nesta passada:
+  - criei `backend/app/services/langgraph_runtime.py` com um fluxo stateful inicial para qualificar lead, pedir cadastro faltante e acionar `handoff`
+  - o `agent-lab` agora prefere `LANGGRAPH_RUNTIME_ENABLED=true` e usa o novo runtime antes de tentar o caminho de Rasa
+  - adicionei `LANGGRAPH_RUNTIME_ENABLED` em `backend/app/core/config.py` e `backend/.env.example`
+  - alinhei `backend/requirements.txt` para incluir `langgraph`
+  - documentei a nova direcao em `docs/langgraph-runtime-plan.md` e atualizei o `README.md`
+  - adicionei regressao cobrindo fluxo do runtime e integracao do `agent-lab`
+- Validacao executada:
+  - `python3 -m py_compile backend/app/services/langgraph_runtime.py backend/app/api/v1/messages/routes.py backend/tests/test_langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py` -> `5 passed`
+- Status atual:
+  - o caminho recomendado do projeto passou a ser `langgraph` library dentro do backend atual
+  - o suporte anterior a `rasa_runtime` ficou apenas como trilha secundaria, nao como direcao principal
+- Proximo passo recomendado:
+  - expandir o `langgraph_runtime` para usar snapshot real de contexto da conversa e depois plugar o mesmo runtime no WhatsApp
+
+## 2026-03-24
+- `sdr`: deixei um caminho operacional minimo para subir o `rasa-sdr` localmente e ligar o `agent-lab` ao runtime novo.
+- O que mudou nesta passada:
+  - o `docker-compose.yml` ganhou os services `rasa-sdr` e `rasa-actions`
+  - criei um action server minimo em `rasa-sdr/actions/` para devolver `slot_projection`, `follow_up_suggestion` e `handoff_requested`
+  - criei o bootstrap `rasa-sdr/scripts/start-rasa.sh`, que treina no boot e sobe o REST webhook
+  - o parser de `backend/app/services/rasa_runtime.py` agora aceita tambem o payload `custom.metadata` do REST channel do Rasa
+  - alinhei `backend/.env.example`, `README.md` e `rasa-sdr/README.md` com as variaveis e passos de execucao local
+- Validacao executada:
+  - `python3 -m py_compile backend/app/services/rasa_runtime.py backend/tests/test_rasa_runtime.py rasa-sdr/actions/actions.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_rasa_runtime.py` -> `3 passed`
+  - `docker compose config` -> ok
+- Limitacoes encontradas:
+  - este shell nao tem `RASA_LICENSE`/`RASA_PRO_LICENSE`, entao nao foi possivel subir o `rasa-sdr`
+  - este shell tambem nao tem permissao no `docker.sock`, entao o build local de `rasa-actions` falhou antes do smoke completo
+- Proximo passo recomendado:
+  - rodar `docker compose up -d rasa-actions rasa-sdr` em um shell com licenca Rasa e acesso Docker, depois testar o `agent-lab` com `RASA_RUNTIME_ENABLED=true`
+
+## 2026-03-24
+- `sdr`: plugei o `agent-lab` ao runtime novo de Rasa por feature flag, sem mexer no WhatsApp.
+- O que mudou nesta passada:
+  - `backend/app/api/v1/messages/routes.py` agora consegue alternar entre o runtime antigo e o `rasa_runtime`
+  - quando `RASA_RUNTIME_ENABLED=true`, o `agent-lab` envia a mensagem para o Rasa usando `conversation_id` como `sender`
+  - a resposta do Rasa passa a projetar slots basicos em `Lead` (`name`, `phone`, `cpf`) e a carregar `rasa_slot_projection` no metadata
+  - o fluxo de simulacao/stream do lab agora respeita `handoff_requested` vindo do Rasa
+  - adicionei testes cobrindo projecao de slots e roteamento por feature flag
+  - ajustei `backend/app/core/security.py` com `from __future__ import annotations` para manter compatibilidade de testes neste host com Python 3.9
+- Validacao executada:
+  - `python3 -m py_compile backend/app/core/security.py backend/app/api/v1/messages/routes.py backend/tests/test_messages_rasa_runtime.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_rasa_runtime.py backend/tests/test_messages_rasa_runtime.py` -> `4 passed`
+- Proximo passo recomendado:
+  - subir um `rasa-sdr` local e testar o `agent-lab` com `RASA_RUNTIME_ENABLED=true` antes de tocar no canal real
+
+## 2026-03-24
+- `sdr`: comecei a materializar a migracao para `Rasa CALM` dentro do repositorio.
+- O que mudou nesta passada:
+  - criei o esqueleto `rasa-sdr/` com `config.yml`, `domain.yml`, `nlu.yml`, `credentials.yml`, `endpoints.yml` e flows iniciais de qualificacao, cadastro, proposta e handoff
+  - adicionei configuracoes de runtime Rasa em `backend/app/core/config.py`
+  - criei o adaptador `backend/app/services/rasa_runtime.py` com contrato para enviar mensagens ao Rasa e interpretar a resposta
+  - adicionei regressao cobrindo payload de envio e parsing da resposta em `backend/tests/test_rasa_runtime.py`
+- Validacao executada:
+  - `python3 -m py_compile backend/app/core/config.py backend/app/services/rasa_runtime.py backend/tests/test_rasa_runtime.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_rasa_runtime.py` -> `2 passed`
+- Proximo passo recomendado:
+  - plugar o `agent-lab` ao `rasa_runtime` por feature flag antes de substituir o runtime antigo no WhatsApp
+
+## 2026-03-24
+- `sdr`: consolidei a recomendacao de trocar o motor atual de conversa por `Rasa CALM`.
+- O que mudou nesta passada:
+  - documentei um plano de migracao em `docs/rasa-calm-migration-plan.md`
+  - a proposta preserva CRM, WhatsApp, inbox e banco atual, trocando apenas o runtime de dialogo
+  - defini arquitetura alvo, slots, flows centrais, adaptador backend->Rasa e rollout em fases
+- Status atual:
+  - a recomendacao tecnica do projeto passou a ser `Rasa CALM` como motor principal de dialogo
+- Proximo passo recomendado:
+  - criar o esqueleto do servico `rasa-sdr` e plugar primeiro no `agent-lab` antes de levar ao WhatsApp
+
+## 2026-03-24
 - `sdr`: commit e rollout da passada de confiabilidade/qualificacao foram concluídos no ambiente da stack `sdr`.
 - O que mudou nesta passada:
   - commit local `d44fd4d` com os ajustes de abertura, captura de telefone, memoria curta e proximos passos da SDR

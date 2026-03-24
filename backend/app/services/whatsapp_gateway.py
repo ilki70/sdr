@@ -9,7 +9,6 @@ from fastapi import HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.graph import run_sales_agent
 from app.agents.state import AgentState
 from app.core.config import get_settings
 from app.core.time import utcnow_naive
@@ -29,6 +28,7 @@ from app.services.conversation_context import (
 from app.services.lead_capture import apply_lead_capture, next_required_profile_field_label
 from app.services.conversation_media import summarize_media_attachments
 from app.services.messages import list_recent_conversation_messages, persist_conversation_pipeline_fields, save_message
+from app.services.runtime_router import run_configured_sales_runtime
 
 settings = get_settings()
 
@@ -431,7 +431,14 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
         media_context=media_notes,
         lead_profile=lead,
     )
-    state = await run_sales_agent(state)
+    state, _model_name = await run_configured_sales_runtime(
+        state=state,
+        tenant_id=payload.tenant_id,
+        agent_id=conversation.agent_id or integration.agent_id,
+        lead=lead,
+        channel="whatsapp",
+        attachments=[attachment.model_dump() for attachment in payload.attachments],
+    )
 
     await save_message(
         db=db,
@@ -452,10 +459,10 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
         db=db,
         conversation_id=conversation.id,
         tenant_id=payload.tenant_id,
-        pipeline_status="qualifying",
+        pipeline_status="handoff" if getattr(state, "handoff_requested", False) else "qualifying",
         summary=effective_message_text[:160],
         next_step=state.follow_up_suggestion or "Aprofundar necessidade e conduzir para o proximo passo.",
-        status="open",
+        status="waiting_human" if getattr(state, "handoff_requested", False) else "open",
         agent_id=conversation.agent_id or integration.agent_id,
     )
     await db.execute(
