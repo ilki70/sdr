@@ -1,6 +1,25 @@
 # Worklog
 
 ## 2026-03-24
+- `sdr`: limpeza final, commit, push e deploy do runtime novo com `langgraph` foram concluídos.
+- O que mudou nesta passada:
+  - removi o caminho morto de `Rasa` do codigo ativo, configs locais e `docker-compose.yml`
+  - mantive o repositorio coerente com `langgraph` como unico caminho recomendado para o runtime novo
+  - commit publicado: `0f734a9` `feat: migrate sdr runtime to langgraph`
+  - backend buildado no Portainer como `sdr-backend:prod-20260324-0f734a9`
+  - stack `sdr` reaplicada mantendo `FRONTEND_IMAGE=sdr-frontend:prod-20260324-04110b8`
+- Validacao executada:
+  - `python3 -m py_compile ...` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_whatsapp_gateway.py` -> `15 passed`
+  - services vivos: `sdr_backend` convergiu para `sdr-backend:prod-20260324-0f734a9`
+  - `https://pulse.orfi.com.br/health` -> `ok`
+- Status atual:
+  - `main` no GitHub foi atualizado ate `0f734a9`
+  - deploy produtivo do backend novo ja esta ativo
+- Proximo passo recomendado:
+  - rodar uma bateria local de simulacoes espelhando conversas reais para medir os desvios finais do comportamento comercial
+
+## 2026-03-24
 - `sdr`: o `langgraph_runtime` agora segura o estado de proposta/simulacao em andamento sem regredir para qualificacao.
 - O que mudou nesta passada:
   - entrou leitura de `proposal_commitment_state` a partir do historico recente e do `pipeline_status`
