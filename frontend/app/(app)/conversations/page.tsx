@@ -14,6 +14,11 @@ type Conversation = {
   title: string;
   channel: string;
   status: string;
+  lead_name?: string | null;
+  lead_phone?: string | null;
+  lead_cpf?: string | null;
+  lead_profile_missing_fields?: string[];
+  agent_paused?: boolean;
   message_count: number;
   started_at?: string | null;
   updated_at: string;
@@ -103,6 +108,19 @@ function inferMockStatus(conversation: Conversation): LeadPipelineStatus {
   return "qualifying";
 }
 
+function leadFieldLabel(field: string): string {
+  switch (field) {
+    case "nome_completo":
+      return "nome completo";
+    case "cpf":
+      return "CPF";
+    case "telefone":
+      return "telefone";
+    default:
+      return field;
+  }
+}
+
 function buildMockSummary(conversation: Conversation): string {
   const preview = conversation.last_message_preview?.trim();
   if (preview) {
@@ -122,6 +140,8 @@ function decorateConversation(conversation: Conversation): DecoratedConversation
   const pipelineStatus = conversation.pipeline_status || inferMockStatus(conversation);
   return {
     ...conversation,
+    lead_profile_missing_fields: conversation.lead_profile_missing_fields || [],
+    agent_paused: conversation.agent_paused || false,
     summary: conversation.summary || buildMockSummary(conversation),
     pipeline_status: pipelineStatus,
     next_step:
@@ -189,7 +209,8 @@ export default function ConversationsPage() {
           return true;
         }
         const haystack = `${conversation.title} ${conversation.summary} ${conversation.channel}`.toLowerCase();
-        return haystack.includes(normalizedSearch);
+        const leadFields = `${conversation.lead_name || ""} ${conversation.lead_phone || ""} ${conversation.lead_cpf || ""}`.toLowerCase();
+        return `${haystack} ${leadFields}`.includes(normalizedSearch);
       });
 
     return [...filtered].sort((left, right) => {
@@ -402,10 +423,22 @@ export default function ConversationsPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-300">{formatDateTimeSP(conversation.updated_at)}</td>
                     <td className="px-4 py-3">
+                      {(() => {
+                        const missingFields = conversation.lead_profile_missing_fields || [];
+                        return (
                       <div className="min-w-[220px]">
-                        <p className="font-medium text-slate-100">{conversation.title}</p>
+                        <p className="font-medium text-slate-100">{conversation.lead_name || conversation.title}</p>
+                        <p className="mt-1 text-xs text-slate-400">{conversation.lead_phone || "Telefone nao capturado"}</p>
+                        <p className="mt-1 text-xs text-slate-500">{conversation.lead_cpf || "CPF nao capturado"}</p>
                         <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">{conversation.channel}</p>
+                        {missingFields.length > 0 ? (
+                          <p className="mt-2 text-[11px] uppercase tracking-wide text-amber-300">
+                            Faltando: {missingFields.map(leadFieldLabel).join(", ")}
+                          </p>
+                        ) : null}
                       </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -415,7 +448,12 @@ export default function ConversationsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-300">
-                      {agents.find((agent) => agent.id === conversation.agent_id)?.name || "Nao atribuido"}
+                      <div>
+                        <p>{agents.find((agent) => agent.id === conversation.agent_id)?.name || "Nao atribuido"}</p>
+                        {conversation.agent_paused ? (
+                          <p className="mt-1 text-[11px] uppercase tracking-wide text-amber-300">Agente pausado</p>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-slate-400">
                       <p className="max-w-[16rem] truncate" title={conversation.next_step}>
@@ -582,10 +620,29 @@ export default function ConversationsPage() {
                     <p className="mt-2 text-sm leading-6 text-slate-300">{decorateConversation(detail.conversation).summary}</p>
                   </div>
                   <div className="rounded-[24px] border border-slate-800 bg-slate-950 px-4 py-4">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Cadastro obrigatorio</p>
+                    <div className="mt-2 space-y-2 text-sm text-slate-300">
+                      <p>Nome: {detail.conversation.lead_name || "Nao capturado"}</p>
+                      <p>Telefone: {detail.conversation.lead_phone || "Nao capturado"}</p>
+                      <p>CPF: {detail.conversation.lead_cpf || "Nao capturado"}</p>
+                      <p>
+                        Pendencias:{" "}
+                        {detail.conversation.lead_profile_missing_fields?.length
+                          ? detail.conversation.lead_profile_missing_fields.map(leadFieldLabel).join(", ")
+                          : "cadastro completo"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="rounded-[24px] border border-slate-800 bg-slate-950 px-4 py-4">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Responsavel atual</p>
                     <p className="mt-2 text-sm text-slate-300">
                       {agents.find((agent) => agent.id === detail.conversation.agent_id)?.name || "Nao atribuido"}
                     </p>
+                    {detail.conversation.agent_paused ? (
+                      <p className="mt-2 text-xs uppercase tracking-wide text-amber-300">
+                        Agente pausado por handoff humano
+                      </p>
+                    ) : null}
                   </div>
                   {detail.messages.length > 0 ? (
                     detail.messages.map((message) => {

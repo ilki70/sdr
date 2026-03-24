@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.time import utcnow_naive
 from app.services.agents import resolve_agent_for_conversation
+from app.services.lead_capture import required_profile_fields
 from app.models.entities import ChannelIntegration, Conversation, Lead, Message
 from app.schemas.messages import ConversationDetailResponse, ConversationMessageResponse, ConversationSummaryResponse
 
@@ -230,7 +231,7 @@ async def persist_conversation_exchange(
     await db.commit()
 
 
-async def _get_lead_for_conversation(db: AsyncSession, conversation: Conversation) -> Lead:
+async def get_lead_for_conversation(db: AsyncSession, conversation: Conversation) -> Lead:
     result = await db.execute(
         select(Lead).where(Lead.id == conversation.lead_id, Lead.tenant_id == conversation.tenant_id)
     )
@@ -273,6 +274,12 @@ def _derive_summary(conversation: Conversation, lead: Lead, latest_message: Mess
     if lead.name:
         return f"Lead {lead.name} entrou pelo canal {conversation.channel} e ainda nao tem resumo operacional."
     return f"Lead entrou pelo canal {conversation.channel} e ainda nao tem resumo operacional."
+
+
+def _is_agent_paused(conversation: Conversation) -> bool:
+    status = (conversation.status or "").lower()
+    pipeline_status = (conversation.pipeline_status or "").lower()
+    return status in {"waiting_human", "handoff"} or pipeline_status == "handoff"
 
 
 def _derive_next_step(pipeline_status: str, latest_message: Message | None) -> str:
@@ -356,6 +363,11 @@ async def list_conversations(db: AsyncSession, tenant_id: str) -> list[Conversat
             channel=conversation.channel,
             status=conversation.status,
             lead_id=conversation.lead_id,
+            lead_name=lead.name,
+            lead_phone=lead.phone,
+            lead_cpf=getattr(lead, "cpf", None),
+            lead_profile_missing_fields=required_profile_fields(lead),
+            agent_paused=_is_agent_paused(conversation),
             started_at=conversation.started_at,
             updated_at=conversation.updated_at,
             last_message_preview=(_preview_text(latest_message.content) if latest_message else None),

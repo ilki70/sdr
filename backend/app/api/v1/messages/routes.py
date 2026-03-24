@@ -20,9 +20,11 @@ from app.schemas.messages import (
 )
 from app.services.conversation_context import refresh_conversation_context_from_db
 from app.services.conversation_media import summarize_media_attachments
+from app.services.lead_capture import apply_lead_capture
 from app.services.messages import (
     create_lab_conversation,
     ensure_lab_conversation,
+    get_lead_for_conversation,
     get_conversation_detail,
     list_conversations,
     list_recent_conversation_messages,
@@ -51,6 +53,9 @@ async def _prepare_state(
     effective_message_text = payload.message_text.strip()
     if media_notes:
         effective_message_text = f"{effective_message_text}\n{' | '.join(media_notes)}".strip()
+    lead = await get_lead_for_conversation(db, conversation)
+    apply_lead_capture(lead, text=effective_message_text, fallback_phone=lead.phone)
+    await db.flush()
     state = AgentState(
         tenant_id=context.tenant_id,
         agent_id=conversation.agent_id,

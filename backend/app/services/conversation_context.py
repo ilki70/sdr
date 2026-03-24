@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from datetime import datetime
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -11,6 +13,7 @@ from app.core.time import utcnow_naive
 from app.services.messages import list_recent_conversation_messages
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 FRAGMENT_BUFFER_WINDOW_SECONDS = 6
 
@@ -31,6 +34,7 @@ class ConversationContextSnapshot(BaseModel):
     extracted_slots: dict[str, str] = Field(default_factory=dict)
     summary: str = "sem fatos estruturados"
     media_summary: str = "sem midia"
+    memory_notes: list[str] = Field(default_factory=list)
     turn_count: int = 0
     updated_at: datetime = Field(default_factory=utcnow_naive)
     pending_fragment_text: str = ""
@@ -463,9 +467,65 @@ def build_conversation_context_snapshot(
         extracted_slots=extracted_slots,
         summary="; ".join(summary_parts) if summary_parts else "sem fatos estruturados",
         media_summary=" | ".join(media_notes) if media_notes else "sem midia",
+        memory_notes=_build_memory_notes(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            summary_parts=summary_parts,
+            extracted_slots=extracted_slots,
+            turn_count=turn_count,
+            last_intent=last_intent or (infer_turn_intent(latest_user_message) if latest_user_message else "unknown"),
+            current_question_slot=expected_slot or "nao informado",
+            last_confirmed_slot=last_confirmed_slot or "nao informado",
+        ),
         turn_count=turn_count,
         updated_at=utcnow_naive(),
     )
+
+
+def _build_memory_notes(
+    *,
+    tenant_id: str,
+    conversation_id: str,
+    summary_parts: list[str],
+    extracted_slots: dict[str, str],
+    turn_count: int,
+    last_intent: str,
+    current_question_slot: str,
+    last_confirmed_slot: str,
+) -> list[str]:
+    notes: list[str] = []
+    if turn_count <= 1:
+        notes.append(f"conversa_iniciada={tenant_id}:{conversation_id}")
+    for key in ("lead_name", "asset_type", "asset_value", "target_use_case", "goal", "timeline", "lance"):
+        value = extracted_slots.get(key)
+        if value:
+            label = "prazo" if key == "timeline" else key
+            notes.append(f"{label}={value}")
+    if last_intent and last_intent != "unknown":
+        notes.append(f"ultima_intencao={last_intent}")
+    if current_question_slot and current_question_slot != "nao informado":
+        notes.append(f"pergunta_atual={current_question_slot}")
+    if last_confirmed_slot and last_confirmed_slot != "nao informado":
+        notes.append(f"ultimo_slot_confirmado={last_confirmed_slot}")
+    for item in summary_parts:
+        compact = _clean_text(item)
+        if compact:
+            notes.append(f"resumo={compact}")
+    return _dedupe_preserve_order(notes)
+
+
+def _dedupe_preserve_order(values: list[str], *, max_items: int = 24) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        cleaned = _clean_text(value)
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        result.append(cleaned)
+        if len(result) >= max_items:
+            break
+    return result
 
 
 def conversation_context_cache_key(tenant_id: str, conversation_id: str) -> str:
@@ -483,7 +543,14 @@ async def load_cached_conversation_context(tenant_id: str, conversation_id: str)
     client = get_redis_client()
     if client is None:
         return None
-    payload = await client.get(conversation_context_cache_key(tenant_id, conversation_id))
+    try:
+        payload = await client.get(conversation_context_cache_key(tenant_id, conversation_id))
+    except (RedisError, OSError, TimeoutError) as exc:
+        logger.warning(
+            "conversation_context_cache_read_failed",
+            extra={"tenant_id": tenant_id, "conversation_id": conversation_id, "error": str(exc)},
+        )
+        return None
     if not payload:
         return None
     return ConversationContextSnapshot.model_validate_json(payload)
@@ -496,11 +563,17 @@ async def store_cached_conversation_context(
     if client is None:
         return snapshot
     ttl_seconds = max(int(settings.conversation_context_ttl_seconds), 60)
-    await client.setex(
-        conversation_context_cache_key(snapshot.tenant_id, snapshot.conversation_id),
-        ttl_seconds,
-        snapshot.model_dump_json(),
-    )
+    try:
+        await client.setex(
+            conversation_context_cache_key(snapshot.tenant_id, snapshot.conversation_id),
+            ttl_seconds,
+            snapshot.model_dump_json(),
+        )
+    except (RedisError, OSError, TimeoutError) as exc:
+        logger.warning(
+            "conversation_context_cache_write_failed",
+            extra={"tenant_id": snapshot.tenant_id, "conversation_id": snapshot.conversation_id, "error": str(exc)},
+        )
     return snapshot
 
 
@@ -512,6 +585,7 @@ async def refresh_conversation_context_from_db(
     last_intent: str | None = None,
     media_notes: list[str] | None = None,
 ) -> ConversationContextSnapshot:
+    previous_snapshot = await load_cached_conversation_context(tenant_id, conversation_id)
     history = await list_recent_conversation_messages(db, tenant_id, conversation_id, limit=20)
     payload = [
         {
@@ -527,6 +601,10 @@ async def refresh_conversation_context_from_db(
         last_intent=last_intent,
         media_notes=media_notes,
     )
+    if previous_snapshot is not None:
+        snapshot.memory_notes = _merge_memory_notes(previous_snapshot.memory_notes, snapshot.memory_notes)
+        if previous_snapshot.summary and previous_snapshot.summary != "sem fatos estruturados":
+            snapshot.memory_notes = _merge_memory_notes([f"memoria_anterior={previous_snapshot.summary}"], snapshot.memory_notes)
     return await store_cached_conversation_context(snapshot)
 
 
@@ -545,6 +623,7 @@ async def clear_pending_fragment(
 def format_conversation_context_for_prompt(snapshot: ConversationContextSnapshot | None) -> str:
     if snapshot is None:
         return "contexto estruturado ausente"
+    memory_notes = " | ".join(snapshot.memory_notes[-12:]) if snapshot.memory_notes else "sem memoria longa"
     return (
         f"lead_name={snapshot.lead_name}; "
         f"asset_type={snapshot.asset_type}; "
@@ -559,5 +638,21 @@ def format_conversation_context_for_prompt(snapshot: ConversationContextSnapshot
         f"ultima_intencao={snapshot.last_intent}; "
         f"turnos={snapshot.turn_count}; "
         f"midia={snapshot.media_summary}; "
-        f"resumo={snapshot.summary}"
+        f"resumo={snapshot.summary}; "
+        f"memoria_longa={memory_notes}"
     )
+
+
+def _merge_memory_notes(*groups: list[str], max_items: int = 24) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for value in group:
+            cleaned = _clean_text(value)
+            if not cleaned or cleaned in seen:
+                continue
+            seen.add(cleaned)
+            merged.append(cleaned)
+            if len(merged) >= max_items:
+                return merged
+    return merged

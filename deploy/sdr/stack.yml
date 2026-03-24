@@ -1,6 +1,16 @@
 version: "3.9"
 
 services:
+  redis:
+    image: redis:7-alpine@sha256:8b81dd37ff027bec4e516d41acfbe9fe2460070dc6d4a4570a2ac5b9d59df065
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - sdr_redis_data:/data
+    networks:
+      - internal
+    deploy:
+      replicas: 1
+
   postgres:
     image: postgres:16-alpine@sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416
     environment:
@@ -22,6 +32,9 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://atendente3:atendente3@postgres:5432/atendente3}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CONVERSATION_CONTEXT_TTL_SECONDS: ${CONVERSATION_CONTEXT_TTL_SECONDS:-86400}
+      CELERY_TASK_ALWAYS_EAGER: ${CELERY_TASK_ALWAYS_EAGER:-true}
       BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:8000}
       WHATSAPP_GATEWAY_BASE_URL: ${WHATSAPP_GATEWAY_BASE_URL:-http://whatsapp-gateway:8090}
       WHATSAPP_GATEWAY_SECRET: ${WHATSAPP_GATEWAY_SECRET:-replace-with-gateway-secret}
@@ -97,6 +110,8 @@ networks:
     external: true
 
 volumes:
+  sdr_redis_data:
+    name: sdr_redis_data
   backend_data:
     name: atendente3_backend_data
   postgres_data:

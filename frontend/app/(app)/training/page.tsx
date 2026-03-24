@@ -73,6 +73,32 @@ type TrainingResponse = {
   report_markdown: string;
 };
 
+type Improvement = {
+  id: string;
+  source_type: string;
+  title: string;
+  status: string;
+  summary_text: string | null;
+  findings_json: { items?: string[]; stats?: Record<string, number> } | null;
+  recommendations_json: { items?: string[] } | null;
+  sample_conversation_ids_json: { items?: string[] } | null;
+  base_agent_version_no: number | null;
+  applied_agent_version_no: number | null;
+  base_persona_version_no: number | null;
+  applied_persona_version_no: number | null;
+  reverted_agent_version_no: number | null;
+  reverted_persona_version_no: number | null;
+  reverted_at: string | null;
+  created_at: string;
+};
+
+type ConversationImprovementResponse = {
+  evaluation_run: EvaluationRun;
+  improvement: Improvement | null;
+  summary_json: Record<string, unknown>;
+  report_markdown: string;
+};
+
 const focusOptions = [
   { value: "first_attendance", label: "Primeiro atendimento" },
   { value: "qualification", label: "Qualificacao" },
@@ -93,14 +119,19 @@ export default function TrainingPage() {
   const [result, setResult] = useState<TrainingResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isTraining, setIsTraining] = useState(false);
+  const [isReviewingConversations, setIsReviewingConversations] = useState(false);
+  const [isRevertingImprovementId, setIsRevertingImprovementId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [improvements, setImprovements] = useState<Improvement[]>([]);
 
   const currentVersion = detail?.versions[0] || null;
   const linkedPersona = personas.find((persona) => persona.id === currentVersion?.persona_id) || null;
   async function loadAgentDetail(agentId: string) {
     const payload = await fetchJson<AgentDetail>(`/api/proxy/agents/${agentId}`);
     setDetail(payload);
+    const improvementItems = await fetchJson<Improvement[]>(`/api/proxy/agents/${agentId}/improvements`);
+    setImprovements(improvementItems);
   }
 
   async function loadData(preferredAgentId?: string) {
@@ -162,6 +193,51 @@ export default function TrainingPage() {
       setError(cause instanceof Error ? cause.message : "Falha ao executar treino.");
     } finally {
       setIsTraining(false);
+    }
+  }
+
+  async function handleConversationReview() {
+    if (!detail) {
+      return;
+    }
+    setIsReviewingConversations(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const payload = await fetchJson<ConversationImprovementResponse>(`/api/proxy/agents/${detail.agent.id}/conversation-improvements`, {
+        method: "POST",
+        body: JSON.stringify({ auto_apply: true, max_messages_per_conversation: 24 }),
+      });
+      setNotice(
+        payload.improvement?.status === "applied"
+          ? "Autoanálise concluída e melhoria publicada com base nas conversas reais."
+          : "Autoanálise concluída. Nenhuma melhoria nova precisou ser publicada.",
+      );
+      await loadData(detail.agent.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao analisar conversas reais.");
+    } finally {
+      setIsReviewingConversations(false);
+    }
+  }
+
+  async function handleRevertImprovement(improvementId: string) {
+    if (!detail) {
+      return;
+    }
+    setIsRevertingImprovementId(improvementId);
+    setError(null);
+    setNotice(null);
+    try {
+      await fetchJson<Improvement>(`/api/proxy/agents/${detail.agent.id}/improvements/${improvementId}/revert`, {
+        method: "POST",
+      });
+      setNotice("Melhoria revertida e versões anteriores republicadas.");
+      await loadData(detail.agent.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao reverter melhoria.");
+    } finally {
+      setIsRevertingImprovementId(null);
     }
   }
 
@@ -281,6 +357,14 @@ export default function TrainingPage() {
               >
                 {isTraining ? "Treinando..." : "Executar treino"}
               </button>
+              <button
+                type="button"
+                onClick={() => void handleConversationReview()}
+                disabled={isReviewingConversations || !detail}
+                className="ml-3 rounded-full border border-white/15 px-5 py-2 text-sm font-semibold text-white/85 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isReviewingConversations ? "Analisando conversas..." : "Aprender com conversas reais"}
+              </button>
             </form>
           </article>
         </div>
@@ -368,6 +452,73 @@ export default function TrainingPage() {
                   />
                 </section>
               )}
+
+              <article className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold">Histórico de melhorias</h2>
+                    <p className="mt-1 text-sm text-white/60">
+                      Toda melhoria aplicada por treino ou autoanálise operacional fica registrada aqui, com opção de reversão.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/55">{improvements.length} registros</span>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {improvements.length === 0 ? (
+                    <EmptyState
+                      title="Nenhuma melhoria registrada ainda."
+                      description="Use o treino ou a autoanálise de conversas reais para começar a construir o histórico auditável."
+                    />
+                  ) : (
+                    improvements.map((item) => (
+                      <div key={item.id} className="rounded-[20px] border border-white/10 bg-black/20 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <strong className="text-sm text-white/90">{item.title}</strong>
+                            <p className="mt-1 text-xs text-white/45">
+                              {item.source_type} • {formatDateTimeSP(item.created_at)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full border border-white/10 px-2 py-1 text-[11px] text-white/60">{item.status}</span>
+                            {item.status !== "reverted" && (item.applied_agent_version_no || item.applied_persona_version_no) ? (
+                              <button
+                                type="button"
+                                onClick={() => void handleRevertImprovement(item.id)}
+                                disabled={isRevertingImprovementId === item.id}
+                                className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {isRevertingImprovementId === item.id ? "Revertendo..." : "Reverter"}
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                        <p className="mt-3 text-sm text-white/70">{item.summary_text || "Sem resumo adicional."}</p>
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-white/70">
+                            <p className="text-xs uppercase tracking-wide text-white/40">Versões</p>
+                            <p className="mt-2">Agente: base v{item.base_agent_version_no ?? "-"} → aplicada v{item.applied_agent_version_no ?? "-"}</p>
+                            <p className="mt-1">Persona: base v{item.base_persona_version_no ?? "-"} → aplicada v{item.applied_persona_version_no ?? "-"}</p>
+                            {item.reverted_at ? (
+                              <p className="mt-1 text-amber-200">
+                                Revertida em {formatDateTimeSP(item.reverted_at)} para agente v{item.reverted_agent_version_no ?? "-"} e persona v{item.reverted_persona_version_no ?? "-"}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-white/70">
+                            <p className="text-xs uppercase tracking-wide text-white/40">Recomendações</p>
+                            <ul className="mt-2 space-y-1">
+                              {(item.recommendations_json?.items || []).slice(0, 4).map((recommendation) => (
+                                <li key={recommendation}>{recommendation}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </article>
             </>
           ) : (
             <section className="rounded-[24px] border border-white/10 bg-white/5 p-6">

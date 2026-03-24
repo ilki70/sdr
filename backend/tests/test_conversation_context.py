@@ -18,6 +18,14 @@ class FakeRedis:
         self.ttls[key] = ttl
 
 
+class FailingRedis:
+    async def get(self, _key: str) -> str | None:
+        raise ConnectionError("redis unavailable")
+
+    async def setex(self, _key: str, _ttl: int, _value: str) -> None:
+        raise ConnectionError("redis unavailable")
+
+
 def test_build_conversation_context_snapshot_tracks_property_slots() -> None:
     messages = [
         {"role": "assistant", "content": "Posso saber seu nome?"},
@@ -80,6 +88,48 @@ def test_context_cache_roundtrip(monkeypatch) -> None:
     assert loaded is not None
     assert loaded.asset_value == "R$ 400mil"
     assert fake.ttls[conversation_context.conversation_context_cache_key("tenant-1", "conv-1")] >= 60
+
+
+def test_format_conversation_context_includes_long_term_memory_notes() -> None:
+    snapshot = conversation_context.ConversationContextSnapshot(
+        tenant_id="tenant-1",
+        conversation_id="conv-1",
+        lead_name="Ilki",
+        asset_type="casa",
+        asset_value="R$ 400mil",
+        timeline="6 meses",
+        memory_notes=[
+            "lead_name=Ilki",
+            "asset_type=casa",
+            "asset_value=R$ 400mil",
+            "prazo=6 meses",
+            "ultima_intencao=property",
+        ],
+    )
+
+    prompt_block = conversation_context.format_conversation_context_for_prompt(snapshot)
+
+    assert "memoria_longa=lead_name=Ilki | asset_type=casa | asset_value=R$ 400mil | prazo=6 meses | ultima_intencao=property" in prompt_block
+
+
+def test_context_cache_is_best_effort_when_redis_is_down(monkeypatch) -> None:
+    monkeypatch.setattr(conversation_context, "get_redis_client", lambda: FailingRedis())
+
+    snapshot = conversation_context.ConversationContextSnapshot(
+        tenant_id="tenant-1",
+        conversation_id="conv-1",
+        lead_name="Ilki",
+    )
+
+    async def roundtrip() -> conversation_context.ConversationContextSnapshot | None:
+        stored = await conversation_context.store_cached_conversation_context(snapshot)
+        loaded = await conversation_context.load_cached_conversation_context("tenant-1", "conv-1")
+        return stored if loaded is None else loaded
+
+    loaded = asyncio.run(roundtrip())
+
+    assert loaded is not None
+    assert loaded.lead_name == "Ilki"
 
 
 def test_infer_turn_intent_detects_property_lance_and_investment() -> None:

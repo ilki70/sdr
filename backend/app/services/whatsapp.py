@@ -17,6 +17,7 @@ from app.services.conversation_context import (
     resolve_fragmented_inbound_text,
     store_cached_conversation_context,
 )
+from app.services.lead_capture import apply_lead_capture, next_required_profile_field_label
 from app.services.messages import list_recent_conversation_messages, persist_conversation_pipeline_fields, save_message
 
 
@@ -165,6 +166,17 @@ async def _get_or_create_conversation(
     return conversation
 
 
+def _conversation_requires_human(conversation: Conversation) -> bool:
+    return conversation.status in {"waiting_human", "handoff"} or conversation.pipeline_status == "handoff"
+
+
+def _handoff_follow_up_text(lead: Lead) -> str:
+    missing_field = next_required_profile_field_label(lead)
+    if missing_field:
+        return f"Registrar {missing_field} e manter o lead atualizado para proposta."
+    return "Acompanhar a conversa humana e atualizar status e proximo passo do lead."
+
+
 async def handle_inbound_whatsapp_message(
     db: AsyncSession,
     payload: WhatsAppInboundWebhookRequest,
@@ -229,6 +241,8 @@ async def handle_inbound_whatsapp_message(
         media_note_text = " | ".join(media_notes)
         effective_message_text = f"{effective_message_text}\n{media_note_text}".strip()
 
+    apply_lead_capture(lead, text=effective_message_text, fallback_phone=payload.contact_phone)
+
     await save_message(
         db=db,
         tenant_id=integration.tenant_id,
@@ -253,6 +267,42 @@ async def handle_inbound_whatsapp_message(
         conversation_id=conversation.id,
         media_notes=media_notes,
     )
+    if _conversation_requires_human(conversation):
+        await persist_conversation_pipeline_fields(
+            db=db,
+            conversation_id=conversation.id,
+            tenant_id=integration.tenant_id,
+            pipeline_status="handoff",
+            summary=effective_message_text[:160],
+            next_step=_handoff_follow_up_text(lead),
+            status="waiting_human",
+        )
+        await db.execute(
+            update(Lead)
+            .where(Lead.id == lead.id)
+            .values(
+                last_seen_at=utcnow_naive(),
+                lifecycle_status="handoff",
+                updated_at=utcnow_naive(),
+                phone=lead.phone,
+                name=lead.name,
+                cpf=lead.cpf,
+                metadata_json=lead.metadata_json,
+            )
+        )
+        await db.commit()
+        return WhatsAppInboundWebhookResponse(
+            tenant_id=integration.tenant_id,
+            integration_id=integration.id,
+            lead_id=lead.id,
+            conversation_id=conversation.id,
+            reply_text="",
+            intent="handoff",
+            confidence_score=1.0,
+            follow_up_suggestion=_handoff_follow_up_text(lead),
+            reply_fragments=[],
+        )
+
     history = await list_recent_conversation_messages(db, integration.tenant_id, conversation.id)
     state = AgentState(
         tenant_id=integration.tenant_id,
@@ -300,7 +350,15 @@ async def handle_inbound_whatsapp_message(
     await db.execute(
         update(Lead)
         .where(Lead.id == lead.id)
-        .values(last_seen_at=utcnow_naive(), lifecycle_status="engaged", updated_at=utcnow_naive())
+        .values(
+            last_seen_at=utcnow_naive(),
+            lifecycle_status="engaged",
+            updated_at=utcnow_naive(),
+            phone=lead.phone,
+            name=lead.name,
+            cpf=lead.cpf,
+            metadata_json=lead.metadata_json,
+        )
     )
     await refresh_conversation_context_from_db(
         db,

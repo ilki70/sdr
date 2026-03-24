@@ -50,6 +50,11 @@ class ConversationSummaryResponse(BaseModel):
     channel: str
     status: str
     lead_id: str
+    lead_name: str | None = None
+    lead_phone: str | None = None
+    lead_cpf: str | None = None
+    lead_profile_missing_fields: list[str] = Field(default_factory=list)
+    agent_paused: bool = False
     started_at: datetime
     updated_at: datetime
     last_message_preview: str | None = None

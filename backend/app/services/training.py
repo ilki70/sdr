@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 import random
+import re
 from statistics import mean
 from typing import Any
 
@@ -11,11 +12,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.graph import run_sales_agent
 from app.agents.state import AgentState
-from app.models.entities import Agent, AgentVersion, BotPersona, EvaluationRun, PersonaVersion
+from app.models.entities import Agent, AgentImprovement, AgentVersion, BotPersona, Conversation, EvaluationRun, Lead, Message, PersonaVersion
 from app.schemas.agents import AgentVersionCreateRequest
 from app.schemas.knowledge import EvaluationRunResponse
 from app.schemas.personas import PersonaVersionCreateRequest
-from app.schemas.training import AgentTrainingRequest, AgentTrainingResponse, TrainingCycleResponse
+from app.schemas.training import (
+    AgentImprovementResponse,
+    AgentTrainingRequest,
+    AgentTrainingResponse,
+    ConversationImprovementRequest,
+    ConversationImprovementResponse,
+    TrainingCycleResponse,
+)
+from app.services.agent_improvements import create_agent_improvement, list_agent_improvements
 from app.services.agents import (
     create_agent_version,
     get_agent_or_none,
@@ -23,7 +32,7 @@ from app.services.agents import (
 )
 from app.services.conversation_context import refresh_conversation_context_from_db
 from app.services.knowledge_ops import create_evaluation_run, mark_evaluation_finished, mark_evaluation_started
-from app.services.llm import judge_sales_reply
+from app.services.llm import analyze_sales_conversations, judge_sales_reply
 from app.services.messages import (
     create_lab_conversation,
     list_recent_conversation_messages,
@@ -180,6 +189,142 @@ def _score_to_recommendations(averages: dict[str, float], focus: str) -> list[st
     return _merge_unique([], recommendations)
 
 
+def _normalize_message_text(value: str) -> str:
+    compact = " ".join(value.lower().split())
+    return re.sub(r"[^a-z0-9à-ÿ]+", " ", compact).strip()
+
+
+def _looks_like_doc_request(text: str) -> str | None:
+    folded = _normalize_message_text(text)
+    if "nome completo" in folded:
+        return "nome_completo"
+    if re.search(r"\bcpf\b", folded):
+        return "cpf"
+    if "telefone" in folded or "whatsapp" in folded or "celular" in folded:
+        return "telefone"
+    return None
+
+
+def _looks_like_proposal_commitment(text: str) -> bool:
+    folded = _normalize_message_text(text)
+    return any(
+        token in folded
+        for token in [
+            "vou preparar a simulacao",
+            "vou enviar a simulacao",
+            "posso preparar uma proposta",
+            "posso enviar a simulacao",
+            "proposta personalizada",
+            "proposta oficial",
+        ]
+    )
+
+
+def _looks_like_restart_after_commitment(text: str) -> bool:
+    folded = _normalize_message_text(text)
+    return any(
+        token in folded
+        for token in [
+            "qual o objetivo",
+            "qual o prazo",
+            "qual o valor aproximado",
+            "qual o valor do lance",
+            "me informe seu nome completo",
+            "me informe seu cpf",
+            "me informe seu telefone",
+        ]
+    )
+
+
+def _conversation_excerpt(messages: list[Message], max_messages: int) -> list[dict[str, str]]:
+    excerpt = messages[-max_messages:]
+    return [
+        {
+            "role": "assistant" if item.sender_type == "assistant" else "lead",
+            "content": item.content,
+        }
+        for item in excerpt
+        if item.content
+    ]
+
+
+def _heuristic_issue_stats(messages: list[Message]) -> dict[str, int]:
+    provided_fields: set[str] = set()
+    assistant_normalized: list[str] = []
+    proposal_committed = False
+    repeated_doc_requests = 0
+    proposal_regressions = 0
+    repeated_question_patterns = 0
+
+    for message in messages:
+        content = message.content or ""
+        if message.sender_type == "lead":
+            normalized = _normalize_message_text(content)
+            if len(normalized.split()) >= 2 and not any(char.isdigit() for char in normalized):
+                provided_fields.add("nome_completo")
+            if re.search(r"\b\d{11}\b", re.sub(r"\D+", "", content)):
+                provided_fields.add("cpf")
+            if len(re.sub(r"\D+", "", content)) >= 10:
+                provided_fields.add("telefone")
+            continue
+
+        normalized = _normalize_message_text(content)
+        request_field = _looks_like_doc_request(content)
+        if request_field and request_field in provided_fields:
+            repeated_doc_requests += 1
+        if _looks_like_proposal_commitment(content):
+            proposal_committed = True
+        elif proposal_committed and _looks_like_restart_after_commitment(content):
+            proposal_regressions += 1
+
+        if normalized.endswith("?") or "?" in content:
+            if normalized in assistant_normalized[-3:]:
+                repeated_question_patterns += 1
+        assistant_normalized.append(normalized)
+
+    return {
+        "repeated_doc_requests": repeated_doc_requests,
+        "proposal_regressions": proposal_regressions,
+        "repeated_question_patterns": repeated_question_patterns,
+    }
+
+
+async def _list_operational_conversations(
+    db: AsyncSession,
+    tenant_id: str,
+    agent_id: str,
+) -> list[tuple[Conversation, Lead]]:
+    result = await db.execute(
+        select(Conversation, Lead)
+        .join(Lead, Lead.id == Conversation.lead_id)
+        .where(
+            Conversation.tenant_id == tenant_id,
+            Conversation.agent_id == agent_id,
+            Conversation.channel != "lab",
+        )
+        .order_by(Conversation.updated_at.desc(), Conversation.started_at.desc())
+    )
+    return list(result.all())
+
+
+async def _messages_for_conversations(
+    db: AsyncSession,
+    tenant_id: str,
+    conversation_ids: list[str],
+) -> dict[str, list[Message]]:
+    if not conversation_ids:
+        return {}
+    result = await db.execute(
+        select(Message)
+        .where(Message.tenant_id == tenant_id, Message.conversation_id.in_(conversation_ids))
+        .order_by(Message.conversation_id.asc(), Message.sent_at.asc(), Message.created_at.asc())
+    )
+    grouped: dict[str, list[Message]] = {}
+    for message in result.scalars().all():
+        grouped.setdefault(message.conversation_id, []).append(message)
+    return grouped
+
+
 def _apply_persona_revision(
     persona_version: PersonaVersion,
     recommendations: list[str],
@@ -189,6 +334,7 @@ def _apply_persona_revision(
     added_rules = [
         "Responder com tom consultivo, claro, simpatico e pratico.",
         "Abrir o primeiro atendimento com boas-vindas, apresentacao e pergunta sobre o nome do lead.",
+        "Usar emojis com muita parcimonia, no maximo um emoji sutil na abertura e sem exagero nas demais respostas.",
         "Explicar que esta disponivel para ajudar com duvidas sobre consorcios.",
         "Conduzir a conversa com delicadeza para entender a intencao do lead e preparar a melhor proposta.",
         "Evitar repeticao desnecessaria de saudacoes, perguntas e formulas de texto.",
@@ -212,7 +358,7 @@ def _apply_persona_revision(
     ]
     revised_prompt.append(
         "Diretriz adicional fixa: manter abertura simpatica, se apresentar no primeiro contato, perguntar o nome do lead, "
-        "explicar que esta disponivel para ajudar com consorcios, evitar repeticao, fazer no maximo uma pergunta por turno e "
+        "explicar que esta disponivel para ajudar com consorcios, usar emojis com muita parcimonia, evitar repeticao, fazer no maximo uma pergunta por turno e "
         "confirmar apenas os dados novos ou conflitantes, sem repetir o resumo inteiro a cada resposta."
     )
     for item in recommendations:
@@ -255,7 +401,7 @@ def _apply_agent_revision(
     ]
     revised_prompt.append(
         "Diretriz adicional fixa: manter abertura simpatica, se apresentar no primeiro contato, perguntar o nome do lead, "
-        "explicar que esta disponivel para ajudar com consorcios, evitar repeticao, fazer no maximo uma pergunta por turno e "
+        "explicar que esta disponivel para ajudar com consorcios, usar emojis com muita parcimonia, evitar repeticao, fazer no maximo uma pergunta por turno e "
         "confirmar apenas os dados novos ou conflitantes, sem repetir o resumo inteiro a cada resposta."
     )
     for item in recommendations:
@@ -401,6 +547,215 @@ async def _run_cycle(
     return cycle_result, history_results, agent_version, persona_version
 
 
+async def get_agent_improvement_history(
+    db: AsyncSession,
+    tenant_id: str,
+    agent_id: str,
+) -> list[AgentImprovementResponse]:
+    history = await list_agent_improvements(db, tenant_id, agent_id)
+    return [AgentImprovementResponse.model_validate(item) for item in history]
+
+
+async def run_conversation_improvement_review(
+    db: AsyncSession,
+    tenant_id: str,
+    user_id: str,
+    agent_id: str,
+    payload: ConversationImprovementRequest,
+) -> ConversationImprovementResponse:
+    agent = await get_agent_or_none(db, tenant_id, agent_id)
+    if not agent:
+        raise ValueError("Agent not found")
+
+    current_agent_version = await get_published_agent_version_or_none(db, tenant_id, agent.id)
+    if not current_agent_version:
+        raise ValueError("Agent has no published version")
+
+    current_persona: BotPersona | None = None
+    current_persona_version: PersonaVersion | None = None
+    if current_agent_version.persona_id and current_agent_version.persona_version_no is not None:
+        current_persona = await get_persona_or_none(db, tenant_id, current_agent_version.persona_id)
+        if current_persona:
+            result = await db.execute(
+                select(PersonaVersion).where(
+                    PersonaVersion.tenant_id == tenant_id,
+                    PersonaVersion.persona_id == current_persona.id,
+                    PersonaVersion.version_no == current_agent_version.persona_version_no,
+                )
+            )
+            current_persona_version = result.scalar_one_or_none()
+
+    run = await create_evaluation_run(
+        db,
+        tenant_id=tenant_id,
+        product_id=None,
+        created_by_user_id=user_id,
+        evaluation_type="conversation_improvement_review",
+    )
+    await mark_evaluation_started(db, run)
+
+    try:
+        conversations = await _list_operational_conversations(db, tenant_id, agent.id)
+        conversation_ids = [conversation.id for conversation, _lead in conversations]
+        messages_by_conversation = await _messages_for_conversations(db, tenant_id, conversation_ids)
+
+        stats = {
+            "conversation_count": len(conversations),
+            "repeated_doc_requests": 0,
+            "proposal_regressions": 0,
+            "repeated_question_patterns": 0,
+        }
+        samples: list[dict[str, Any]] = []
+
+        for conversation, lead in conversations:
+            messages = messages_by_conversation.get(conversation.id, [])
+            issue_stats = _heuristic_issue_stats(messages)
+            for key, value in issue_stats.items():
+                stats[key] += int(value)
+
+            if len(samples) < 12 and any(value > 0 for value in issue_stats.values()):
+                samples.append(
+                    {
+                        "conversation_id": conversation.id,
+                        "channel": conversation.channel,
+                        "pipeline_status": conversation.pipeline_status,
+                        "summary": conversation.summary or "",
+                        "next_step": conversation.next_step or "",
+                        "lead_name": lead.name or "",
+                        "lead_phone": lead.phone or "",
+                        "lead_cpf": getattr(lead, "cpf", None) or "",
+                        "issues": issue_stats,
+                        "messages": _conversation_excerpt(messages, payload.max_messages_per_conversation),
+                    }
+                )
+
+        analysis_input = {
+            "agent_name": agent.name,
+            "agent_version_no": current_agent_version.version_no,
+            "persona_version_no": current_persona_version.version_no if current_persona_version else None,
+            "stats": stats,
+            "samples": samples,
+        }
+        analysis = await analyze_sales_conversations(analysis_input)
+        findings = [str(item).strip() for item in analysis.get("findings", []) if str(item).strip()]
+        recommendations = [str(item).strip() for item in analysis.get("recommendations", []) if str(item).strip()]
+        summary = str(analysis.get("summary") or "").strip()
+
+        applied_persona_version_no: int | None = None
+        applied_agent_version_no: int | None = None
+        if payload.auto_apply and current_persona and current_persona_version and recommendations:
+            persona_payload = _apply_persona_revision(
+                current_persona_version,
+                recommendations,
+                cycle_no=1,
+                focus="follow_up",
+            )
+            revised_persona = await create_persona_version(
+                db,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                persona=current_persona,
+                payload=persona_payload,
+            )
+            applied_persona_version_no = revised_persona.version_no
+
+            agent_payload = _apply_agent_revision(
+                current_agent_version,
+                persona_id=current_persona.id,
+                persona_version_no=revised_persona.version_no,
+                recommendations=recommendations,
+                cycle_no=1,
+                focus="follow_up",
+            )
+            revised_agent = await create_agent_version(
+                db,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                agent=agent,
+                payload=agent_payload,
+            )
+            applied_agent_version_no = revised_agent.version_no
+
+        summary_json = {
+            "agent_id": agent.id,
+            "conversation_count": len(conversations),
+            "stats": stats,
+            "findings": findings,
+            "recommendations": recommendations,
+            "applied_persona_version_no": applied_persona_version_no,
+            "applied_agent_version_no": applied_agent_version_no,
+        }
+        report_lines = [
+            "# Conversation Improvement Review",
+            "",
+            f"Agente: {agent.name}",
+            f"Conversas analisadas: {len(conversations)}",
+            f"Auto aplicar melhorias: {'sim' if payload.auto_apply else 'nao'}",
+            "",
+            "## Sinais heurísticos",
+            "",
+            f"- Repetição de cadastro: {stats['repeated_doc_requests']}",
+            f"- Regressão após promessa de proposta/simulação: {stats['proposal_regressions']}",
+            f"- Perguntas repetidas ou circulares: {stats['repeated_question_patterns']}",
+            "",
+            "## Achados",
+            "",
+        ]
+        for item in findings or ["Nenhum achado crítico consolidado."]:
+            report_lines.append(f"- {item}")
+        report_lines.extend(["", "## Recomendações", ""])
+        for item in recommendations or ["Nenhuma recomendação automática gerada."]:
+            report_lines.append(f"- {item}")
+        if applied_persona_version_no or applied_agent_version_no:
+            report_lines.extend(["", "## Versões publicadas", ""])
+            if applied_persona_version_no:
+                report_lines.append(f"- Persona publicada: v{applied_persona_version_no}")
+            if applied_agent_version_no:
+                report_lines.append(f"- Agente publicado: v{applied_agent_version_no}")
+        report_markdown = "\n".join(report_lines)
+
+        await mark_evaluation_finished(
+            db,
+            run,
+            status="completed",
+            summary_json=summary_json,
+            report_markdown=report_markdown,
+        )
+        await db.refresh(run)
+
+        improvement = await create_agent_improvement(
+            db,
+            tenant_id=tenant_id,
+            agent_id=agent.id,
+            created_by_user_id=user_id,
+            evaluation_run_id=run.id,
+            source_type="conversation_review",
+            title="Autoanálise de conversas reais",
+            status="applied" if applied_agent_version_no or applied_persona_version_no else "logged",
+            summary_text=summary,
+            findings_json={"items": findings, "stats": stats},
+            recommendations_json={"items": recommendations},
+            sample_conversation_ids_json={"items": [sample["conversation_id"] for sample in samples]},
+            base_agent_version_no=current_agent_version.version_no,
+            applied_agent_version_no=applied_agent_version_no,
+            base_persona_id=current_persona.id if current_persona else None,
+            base_persona_version_no=current_persona_version.version_no if current_persona_version else None,
+            applied_persona_version_no=applied_persona_version_no,
+        )
+
+        return ConversationImprovementResponse(
+            evaluation_run=_evaluation_run_response(run),
+            agent=await _agent_response(db, tenant_id, agent.id),
+            persona=await _persona_response(db, tenant_id, current_persona.id if current_persona else None),
+            improvement=AgentImprovementResponse.model_validate(improvement),
+            summary_json=summary_json,
+            report_markdown=report_markdown,
+        )
+    except Exception as exc:
+        await mark_evaluation_finished(db, run, status="failed", error_message=str(exc))
+        raise
+
+
 async def run_agent_training(
     db: AsyncSession,
     tenant_id: str,
@@ -540,6 +895,26 @@ async def run_agent_training(
             report_markdown=report_markdown,
         )
         await db.refresh(run)
+        if applied_persona_version_no or applied_agent_version_no:
+            await create_agent_improvement(
+                db,
+                tenant_id=tenant_id,
+                agent_id=agent.id,
+                created_by_user_id=user_id,
+                evaluation_run_id=run.id,
+                source_type="simulated_training",
+                title=f"Treino automático: {_focus_label(payload.focus)}",
+                status="applied",
+                summary_text=f"Treino com {payload.cycles} ciclo(s) e foco em {_focus_label(payload.focus)}.",
+                findings_json={"items": _merge_unique([], [item for cycle in cycles for item in cycle.findings])},
+                recommendations_json={"items": all_recommendations},
+                sample_conversation_ids_json={"items": [item for cycle in cycles for item in cycle.conversation_ids]},
+                base_agent_version_no=current_agent_version.version_no if current_agent_version else None,
+                applied_agent_version_no=applied_agent_version_no,
+                base_persona_id=current_persona.id if current_persona else None,
+                base_persona_version_no=current_persona_version.version_no if current_persona_version else None,
+                applied_persona_version_no=applied_persona_version_no,
+            )
         return AgentTrainingResponse(
             evaluation_run=_evaluation_run_response(run),
             agent=await _agent_response(db, tenant_id, agent.id),

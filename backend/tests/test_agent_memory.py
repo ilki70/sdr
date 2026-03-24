@@ -1,7 +1,10 @@
 import asyncio
 
 from app.agents.nodes import _build_conversation_memory
+from app.agents.nodes import _build_initial_opening_fragments
+from app.agents.nodes import _limit_emojis
 from app.agents.nodes import classify_intent
+from app.agents.nodes import compose_reply
 from app.agents.state import AgentState
 
 
@@ -60,3 +63,32 @@ def test_build_conversation_memory_maps_short_numeric_reply_to_lance_when_prompt
     assert memory["lance"] == "R$ 10mil"
     assert memory["current_question_slot"] == "nao informado"
     assert memory["last_confirmed_slot"] == "lance"
+
+
+def test_build_initial_opening_fragments_are_fixed() -> None:
+    assert _build_initial_opening_fragments() == [
+        "Olá! Aqui é da Orfi Consórcios 👋",
+        "Me conta: você está buscando imóvel ou veículo?",
+    ]
+
+
+def test_compose_reply_uses_fixed_opening_for_first_touch() -> None:
+    state = AgentState(tenant_id="tenant-1", message_text="oi")
+
+    result = asyncio.run(compose_reply(state))
+
+    assert result.reply_fragments == [
+        "Olá! Aqui é da Orfi Consórcios 👋",
+        "Me conta: você está buscando imóvel ou veículo?",
+    ]
+    assert result.draft_reply == "Olá! Aqui é da Orfi Consórcios 👋\n\nMe conta: você está buscando imóvel ou veículo?"
+    assert result.follow_up_suggestion == "Perguntar se o lead busca imóvel ou veículo."
+    assert result.next_action == "send"
+
+
+def test_limit_emojis_keeps_reply_discreet() -> None:
+    text = _limit_emojis("Oi 👋 tudo bem ✅? 🚀", max_emojis=1)
+
+    assert "👋" in text
+    assert "✅" not in text
+    assert "🚀" not in text

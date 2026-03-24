@@ -16,6 +16,8 @@ from app.schemas.agents import (
     ConsorcioStudioUpdateRequest,
 )
 from app.schemas.training import AgentTrainingRequest, AgentTrainingResponse
+from app.schemas.training import AgentImprovementResponse, ConversationImprovementRequest, ConversationImprovementResponse
+from app.services.agent_improvements import get_agent_improvement_or_none, revert_agent_improvement
 from app.services.agents import (
     count_active_agents,
     create_agent,
@@ -29,7 +31,7 @@ from app.services.agents import (
     update_consorcio_studio,
     update_agent,
 )
-from app.services.training import run_agent_training
+from app.services.training import get_agent_improvement_history, run_agent_training, run_conversation_improvement_review
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -190,3 +192,51 @@ async def post_agent_training(
         return await run_agent_training(db, context.tenant_id, context.user_id, agent_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/{agent_id}/conversation-improvements", response_model=ConversationImprovementResponse)
+async def post_conversation_improvements(
+    agent_id: str,
+    payload: ConversationImprovementRequest,
+    context: RequestContext = Depends(get_request_context),
+    db: AsyncSession = Depends(get_db_session),
+) -> ConversationImprovementResponse:
+    try:
+        return await run_conversation_improvement_review(db, context.tenant_id, context.user_id, agent_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/{agent_id}/improvements", response_model=list[AgentImprovementResponse])
+async def get_agent_improvements(
+    agent_id: str,
+    context: RequestContext = Depends(get_request_context),
+    db: AsyncSession = Depends(get_db_session),
+) -> list[AgentImprovementResponse]:
+    agent = await get_agent_or_none(db, context.tenant_id, agent_id)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+    return await get_agent_improvement_history(db, context.tenant_id, agent.id)
+
+
+@router.post("/{agent_id}/improvements/{improvement_id}/revert", response_model=AgentImprovementResponse)
+async def post_revert_agent_improvement(
+    agent_id: str,
+    improvement_id: str,
+    context: RequestContext = Depends(get_request_context),
+    db: AsyncSession = Depends(get_db_session),
+) -> AgentImprovementResponse:
+    agent = await get_agent_or_none(db, context.tenant_id, agent_id)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+    improvement = await get_agent_improvement_or_none(db, context.tenant_id, agent.id, improvement_id)
+    if not improvement:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Improvement not found")
+    reverted = await revert_agent_improvement(
+        db,
+        tenant_id=context.tenant_id,
+        user_id=context.user_id,
+        agent=agent,
+        improvement=improvement,
+    )
+    return AgentImprovementResponse.model_validate(reverted)

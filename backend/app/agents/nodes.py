@@ -3,10 +3,12 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from sqlalchemy import select
+
 from app.agents.state import AgentState
 from app.agents.tools import tool_rag_search, tool_web_search_allowlist
-from app.services.llm import generate_sales_reply
 from app.core.db import SessionLocal
+from app.models.entities import Lead
 from app.services.agents import get_published_agent_version_or_none
 from app.services.conversation_context import (
     ConversationContextSnapshot,
@@ -14,7 +16,15 @@ from app.services.conversation_context import (
     format_conversation_context_for_prompt,
     load_cached_conversation_context,
 )
+from app.services.lead_capture import describe_lead_profile, next_required_profile_field_label, required_profile_fields
+from app.services.llm import generate_sales_reply
 from app.services.personas import get_persona_context_for_agent
+
+_EMOJI_CODEPOINT_RANGES = (
+    (0x1F300, 0x1FAFF),
+    (0x1F1E6, 0x1F1FF),
+    (0x2600, 0x27BF),
+)
 
 
 def _fold(value: str) -> str:
@@ -24,6 +34,29 @@ def _fold(value: str) -> str:
 
 def _clean_text(value: str) -> str:
     return " ".join(value.replace("\n", " ").split()).strip()
+
+
+def _is_emoji_char(char: str) -> bool:
+    if not char:
+        return False
+    codepoint = ord(char)
+    return any(start <= codepoint <= end for start, end in _EMOJI_CODEPOINT_RANGES)
+
+
+def _limit_emojis(text: str, *, max_emojis: int = 1) -> str:
+    if max_emojis <= 0:
+        return "".join(char for char in text if not _is_emoji_char(char))
+
+    kept: list[str] = []
+    emoji_count = 0
+    for char in text:
+        if _is_emoji_char(char):
+            emoji_count += 1
+            if emoji_count <= max_emojis:
+                kept.append(char)
+            continue
+        kept.append(char)
+    return "".join(kept)
 
 
 def _format_currency_like(value: str) -> str:
@@ -183,6 +216,34 @@ def _build_conversation_delta(previous: dict[str, str], current: dict[str, str])
     return delta
 
 
+def _proposal_commitment_state(history: list[dict[str, str]]) -> str:
+    assistant_messages = [
+        _fold(item.get("content", ""))
+        for item in history
+        if item.get("role") == "assistant" and item.get("content")
+    ]
+    if any(
+        token in message
+        for message in assistant_messages
+        for token in [
+            "vou preparar a simulacao",
+            "vou enviar a simulacao",
+            "proposta personalizada",
+            "proposta oficial",
+            "ja estou preparando a simulacao",
+        ]
+    ):
+        return "simulacao_em_andamento"
+    return "nenhum"
+
+
+def _build_initial_opening_fragments() -> list[str]:
+    return [
+        "Olá! Aqui é da Orfi Consórcios 👋",
+        "Me conta: você está buscando imóvel ou veículo?",
+    ]
+
+
 def _enforce_grounding_rules(state: AgentState) -> None:
     reply = state.draft_reply
     folded_reply = _fold(reply)
@@ -266,6 +327,22 @@ def _build_follow_up_suggestion(state: AgentState, persona: dict[str, str] | Non
     tone = _fold(persona["tone"]) if persona else "consultivo"
     query = _fold(state.message_text)
     memory = _build_conversation_memory(state.conversation_history, state.message_text)
+    lead = getattr(state, "lead_profile", None)
+
+    if lead:
+        missing_label = next_required_profile_field_label(lead)
+        qualified_for_proposal = (
+            memory["asset_type"] != "nao informado"
+            and memory["asset_value"] != "nao informado"
+            and memory["timeline"] != "nao informado"
+        )
+        if missing_label and qualified_for_proposal:
+            core = f"Antes da simulacao, preciso confirmar seu {missing_label}."
+            if "diret" in tone or "assertiv" in tone:
+                return f"Vamos fechar o cadastro: {core}"
+            if "premium" in tone or "sofistic" in tone:
+                return f"Proximo passo sugerido: {core}"
+            return f"Para eu avancar com seguranca: {core}"
 
     if memory["asset_type"] != "nao informado" and memory["asset_value"] != "nao informado" and memory["timeline"] != "nao informado":
         core = "Se fizer sentido, eu sigo com a proposta e a simulacao usando o valor do bem, o prazo e o lance que voce ja passou."
@@ -300,6 +377,7 @@ def _build_first_touch_style_guidance(state: AgentState) -> str:
         "Evite repetir a mesma saudacao, a mesma pergunta ou a mesma formula de texto em turnos consecutivos.",
         "Nao altere a ordem atual de coleta de dados; apenas deixe a conversa mais natural e humana.",
         "Use o nome do lead com parcimonia; nao repita o nome em toda resposta.",
+        "Use emojis com muita parcimonia: no maximo um emoji sutil na abertura e evite emojis nas demais respostas.",
         "Faça no maximo uma pergunta por turno.",
         "Confirme somente os dados novos que chegaram nesta rodada, em uma frase curta, sem repetir o resumo completo.",
     ]
@@ -307,7 +385,7 @@ def _build_first_touch_style_guidance(state: AgentState) -> str:
         guidance.insert(
             0,
             (
-                "Se esta for a primeira resposta do atendimento, cumprimente, se apresente como Marcia, "
+                "Se esta for a primeira resposta do atendimento, cumprimente, se apresente como Íris, "
                 "pergunte o nome do lead e diga que esta disponivel para ajudar com duvidas sobre consorcios."
             ),
         )
@@ -319,6 +397,30 @@ def _build_first_touch_style_guidance(state: AgentState) -> str:
             ),
         )
     return " ".join(guidance)
+
+
+async def _load_lead_for_state(state: AgentState) -> Lead | None:
+    if not state.lead_id:
+        return None
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(Lead).where(
+                Lead.tenant_id == state.tenant_id,
+                Lead.id == state.lead_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+
+def _format_lead_profile_block(lead: Lead | None) -> str:
+    if not lead:
+        return "cadastro_indisponivel"
+    return (
+        f"nome={lead.name or 'nao informado'}; "
+        f"cpf={getattr(lead, 'cpf', None) or 'nao informado'}; "
+        f"telefone={lead.phone or 'nao informado'}; "
+        f"status={describe_lead_profile(lead)}"
+    )
 
 
 async def _get_agent_runtime_context(state: AgentState) -> dict[str, str]:
@@ -367,6 +469,17 @@ async def retrieve_context(state: AgentState) -> AgentState:
 
 
 async def compose_reply(state: AgentState) -> AgentState:
+    assistant_turn_count = sum(
+        1 for item in state.conversation_history if item.get("role") == "assistant" and item.get("content")
+    )
+    if assistant_turn_count == 0:
+        opening_fragments = _build_initial_opening_fragments()
+        state.draft_reply = "\n\n".join(opening_fragments)
+        state.reply_fragments = opening_fragments
+        state.follow_up_suggestion = "Perguntar se o lead busca imóvel ou veículo."
+        state.next_action = "send"
+        return state
+
     history_lines = [
         f"{item['role']}: {item['content']}"
         for item in state.conversation_history
@@ -390,7 +503,12 @@ async def compose_reply(state: AgentState) -> AgentState:
     new_facts = _build_conversation_delta(previous_memory, memory)
     new_facts_block = ", ".join(new_facts) if new_facts else "nenhum dado novo estruturado"
     runtime = await _get_agent_runtime_context(state)
+    lead_profile = await _load_lead_for_state(state)
+    state.lead_profile = lead_profile
     structured_context_block = format_conversation_context_for_prompt(cached_context)
+    lead_profile_block = _format_lead_profile_block(lead_profile)
+    required_profile_block = ",".join(required_profile_fields(lead_profile)) if lead_profile else "desconhecido"
+    proposal_commitment_block = _proposal_commitment_state(state.conversation_history)
     media_block = " | ".join(state.media_context) if state.media_context else "sem midia"
     persona_block = (
         f"Agente ativo={runtime['persona_name']}. "
@@ -408,6 +526,12 @@ async def compose_reply(state: AgentState) -> AgentState:
         "Se faltar dado, deixe claro e faca uma pergunta objetiva. "
         "Nao volte a pedir informacoes ja informadas na memoria da conversa. "
         "Use os slots estruturados da memoria curta como fonte principal de contexto da conversa. "
+        "Para liberar simulacao, proposta ou envio comercial, o cadastro obrigatorio precisa ter nome completo, CPF e telefone. "
+        "Se o lead ja estiver qualificado para proposta, mas algum desses dados obrigatorios faltar, pergunte apenas pelo proximo dado faltante e nao ofereca a proposta ainda. "
+        "Quando o telefone ja vier do canal, nao peca telefone novamente. "
+        "Se o historico mostrar que simulacao ou proposta ja foi prometida, nao reinicie qualificacao nem volte a pedir dados ja confirmados. "
+        "Nesse estado, responda como simulacao em andamento: esclareca as opcoes concretas, reconheca o que ja foi combinado e avance sem contradicao. "
+        "Se o lead contestar repeticao ou incoerencia, reconheca o contexto ja capturado e corrija a rota em vez de repetir a mesma pergunta. "
         "So atualize um slot quando houver alta confianca no texto do lead ou quando a ultima pergunta do assistente apontar explicitamente esse slot. "
         "Se o lead enviar apenas um numero ou valor curto, trate como resposta ao slot perguntado no turno anterior. "
         "Se a conversa ja tiver bem, valor, prazo e lance, consolide esses dados e avance para simulacao ou proposta, sem recomeçar a qualificacao. "
@@ -427,6 +551,9 @@ async def compose_reply(state: AgentState) -> AgentState:
         "Se o orcamento estiver abaixo da faixa minima do site, reconheca isso de forma consultiva, cite a faixa minima oficial, "
         "evite encerrar a conversa cedo e faca uma pergunta objetiva sobre carro desejado, prazo ou margem para aproximar a parcela minima. "
         f"Memoria da conversa={memory}. "
+        f"Cadastro do lead={lead_profile_block}. "
+        f"Campos obrigatorios ainda faltando={required_profile_block}. "
+        f"Estado de proposta={proposal_commitment_block}. "
         f"{persona_block}"
         f"Intento={state.intent}. "
         f"Historico={history_block}. "
@@ -435,6 +562,7 @@ async def compose_reply(state: AgentState) -> AgentState:
     )
     state.draft_reply = await generate_sales_reply(prompt)
     _enforce_grounding_rules(state)
+    state.draft_reply = _limit_emojis(state.draft_reply, max_emojis=1)
     state.reply_fragments = _split_reply_fragments(state.draft_reply)
     state.follow_up_suggestion = _build_follow_up_suggestion(state, runtime)
     state.next_action = "send"

@@ -178,6 +178,32 @@ class EvaluationRun(Base, TimestampMixin):
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(), nullable=True)
 
 
+class AgentImprovement(Base, TimestampMixin):
+    __tablename__ = "agent_improvements"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id"), nullable=False)
+    evaluation_run_id: Mapped[Optional[str]] = mapped_column(ForeignKey("evaluation_runs.id"), nullable=True)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="applied")
+    summary_text: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
+    findings_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    recommendations_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    sample_conversation_ids_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    base_agent_version_no: Mapped[Optional[int]] = mapped_column(Integer(), nullable=True)
+    applied_agent_version_no: Mapped[Optional[int]] = mapped_column(Integer(), nullable=True)
+    base_persona_id: Mapped[Optional[str]] = mapped_column(ForeignKey("bot_personas.id"), nullable=True)
+    base_persona_version_no: Mapped[Optional[int]] = mapped_column(Integer(), nullable=True)
+    applied_persona_version_no: Mapped[Optional[int]] = mapped_column(Integer(), nullable=True)
+    reverted_agent_version_no: Mapped[Optional[int]] = mapped_column(Integer(), nullable=True)
+    reverted_persona_version_no: Mapped[Optional[int]] = mapped_column(Integer(), nullable=True)
+    reverted_by_user_id: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reverted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(), nullable=True)
+    created_by_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+
 class BotPersona(Base, TimestampMixin):
     __tablename__ = "bot_personas"
 
@@ -283,6 +309,7 @@ class Lead(Base, TimestampMixin):
     name: Mapped[Optional[str]] = mapped_column(String(140), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    cpf: Mapped[Optional[str]] = mapped_column(String(14), nullable=True)
     source_channel: Mapped[str] = mapped_column(String(24), nullable=False)
     lifecycle_status: Mapped[str] = mapped_column(String(32), nullable=False, default="new")
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False, server_default=text("CURRENT_TIMESTAMP"))

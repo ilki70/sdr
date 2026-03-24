@@ -1,5 +1,124 @@
 # Worklog
 
+## 2026-03-24
+- `sdr`: criei um ciclo de autoaprendizado auditável a partir das conversas reais e corrigi a persistência de contexto do Agent Lab.
+- O que mudou nesta passada:
+  - o Agent Lab passou a capturar `nome completo`, `CPF` e `telefone` antes de gerar a resposta, igual ao fluxo de WhatsApp
+  - o prompt da agente agora reconhece estado de `simulação em andamento` e evita reiniciar qualificação ou recadastro após promessa de proposta/simulação
+  - entrou a tabela `agent_improvements` com trilha de melhorias aplicadas, origem, versões base/aplicadas e dados de reversão
+  - o backend ganhou autoanálise de conversas reais do agente, usando todas as conversas operacionais do agente para consolidar sinais heurísticos e recomendações
+  - a página `/training` agora permite rodar `Aprender com conversas reais`, listar o histórico de melhorias e reverter cada melhoria aplicada
+- Validacao executada:
+  - `python3 -m py_compile backend/app/services/training.py backend/app/services/agent_improvements.py backend/app/services/llm.py backend/app/api/v1/agents/routes.py backend/app/api/v1/messages/routes.py backend/app/agents/nodes.py backend/app/models/entities.py backend/app/schemas/training.py backend/app/services/messages.py` -> ok
+  - `npm run typecheck` no frontend com Node 20 -> ok
+- Deploy:
+  - imagem `sdr-backend:prod-20260324d` buildada no proxy Docker do Portainer
+  - imagem `sdr-frontend:prod-20260324a` buildada no proxy Docker do Portainer com contexto enxuto
+  - migration `009_agent_improvement_history` aplicada em container temporario
+  - stack `sdr` reaplicada com `BACKEND_IMAGE=sdr-backend:prod-20260324d` e `FRONTEND_IMAGE=sdr-frontend:prod-20260324a`
+  - services `sdr_backend` e `sdr_frontend` convergiram com `update completed`
+- Smoke em producao:
+  - backend novo respondeu `{"status":"ok","service":"Agente Vendedor Backend"}`
+  - `https://pulse.orfi.com.br/health` respondeu `200`
+- Próximo passo recomendado:
+  - executar uma autoanálise real em `/training`, revisar o primeiro item do histórico e validar manualmente um caso de regressão no Agent Lab como o exemplo reportado
+
+## 2026-03-24
+- `sdr`: reforcei a captura obrigatoria de cadastro do lead e silenciei o agente apos handoff humano sem perder acompanhamento.
+- O que mudou nesta passada:
+  - adicionei `cpf` na tabela `leads` com migration `008_lead_profile_fields`
+  - o backend agora tenta capturar `nome completo`, `CPF` e `telefone` de toda entrada e persiste pendencias no `metadata_json`
+  - os dois fluxos de inbound WhatsApp passaram a seguir atualizando contexto, resumo e status mesmo em `handoff`, mas sem enviar nova resposta do agente
+  - o prompt do agente passou a tratar `nome completo`, `CPF` e `telefone` como pre-requisito antes de simulacao/proposta
+  - a API de conversas agora expoe `lead_name`, `lead_phone`, `lead_cpf`, pendencias cadastrais e flag de agente pausado
+  - a tela `/conversations` passou a mostrar nome, telefone, CPF, pendencias e sinalizacao de agente pausado por handoff
+- Validacao executada:
+  - `python3 -m py_compile backend/app/services/whatsapp.py backend/app/agents/nodes.py backend/app/services/lead_capture.py backend/app/services/messages.py backend/app/schemas/messages.py backend/app/models/entities.py` -> ok
+- Deploy:
+  - imagem `sdr-backend:prod-20260324c` buildada pelo proxy Docker do Portainer
+  - migration `008_lead_profile_fields` executada em container temporario na rede `sdr_internal`
+  - stack `sdr` reaplicada com `BACKEND_IMAGE=sdr-backend:prod-20260324c`
+  - service `sdr_backend` convergiu com `update completed`
+- Smoke em producao:
+  - `GET /health` no container novo respondeu `{"status":"ok","service":"Agente Vendedor Backend"}`
+- Próximo passo recomendado:
+  - validar um caso real com lead sem CPF, depois handoff humano, depois nova mensagem do lead sem resposta automatica da agente
+
+## 2026-03-24
+- `sdr`: implementei memoria longa incremental para a conversa e publiquei o backend novo.
+- O que mudou nesta passada:
+  - o snapshot do Redis ganhou `memory_notes`, com fatos deduplicados e persistentes entre turnos
+  - `refresh_conversation_context_from_db()` agora mescla a memória anterior com o contexto novo da rodada
+  - o prompt do agente passou a receber `memoria_longa=` junto do contexto estruturado
+  - a imagem `sdr-backend:prod-20260324b` foi buildada e publicada na stack `sdr`
+- Validacao executada:
+  - `python3 -m py_compile backend/app/services/conversation_context.py backend/app/agents/nodes.py backend/tests/test_conversation_context.py` -> ok
+- Próximo passo recomendado:
+  - testar uma conversa real longa e ver se o agente passa a retomar fatos antigos sem perder o fio
+
+## 2026-03-24
+- `sdr`: adicionei Redis ao manifesto de produção para suportar o cache de contexto sem depender de localhost.
+- O que mudou nesta passada:
+  - o stack `sdr` ganhou um service `redis` persistente em volume próprio
+  - o backend passou a receber `REDIS_URL=redis://redis:6379/0`
+  - `CELERY_TASK_ALWAYS_EAGER=true` foi mantido para evitar regressão de filas sem worker dedicado nessa stack
+  - a documentação e o `.env.example` de deploy foram alinhados com o novo service
+- Próximo passo recomendado:
+  - publicar a stack atualizada e repetir um inbound real de WhatsApp para confirmar que o cache de contexto funciona sem `callback status 500`
+
+## 2026-03-24
+- `sdr`: investiguei o `callback status 500` do WhatsApp e encontrei a causa no Redis do cache de contexto.
+- O que mudou nesta passada:
+  - os logs de producao mostravam `POST /api/v1/whatsapp/inbound 500` com `ConnectionRefusedError` em `127.0.0.1:6379`
+  - `load_cached_conversation_context()` e `store_cached_conversation_context()` passaram a tratar Redis indisponivel como cache best-effort, sem quebrar o inbound
+  - adicionei regressao para o caso de Redis fora do ar durante o callback do WhatsApp
+- Validacao executada:
+  - `python3 -m py_compile backend/app/services/conversation_context.py backend/tests/test_conversation_context.py backend/tests/test_whatsapp_gateway.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q tests/test_conversation_context.py tests/test_whatsapp_gateway.py` -> bloqueado pelo host com Python 3.9, mas o codigo alvo ficou sintaticamente valido
+- Deploy:
+  - imagem `sdr-backend:prod-20260324a` buildada via API do Portainer
+  - stack `sdr` reaplicada com `BACKEND_IMAGE=sdr-backend:prod-20260324a`
+  - service `sdr_backend` convergiu com `update completed`
+- Próximo passo recomendado:
+  - repetir um inbound real de WhatsApp e confirmar que o `callback status 500` sumiu
+
+## 2026-03-24
+- `sdr`: rebatizei a agente de `Márcia` para `Íris` no tenant `tenant-lab` e alinhei a UI de treino com o novo nome.
+- O que mudou nesta passada:
+  - o registro da agente foi atualizado via `PATCH /api/proxy/agents/{id}` com `name=Íris` e `slug=iris`
+  - a página de treino passou a mostrar `Treino da Íris` e as copias auxiliares agora usam o novo nome
+  - o prompt de primeira resposta já estava apontando para `Íris`, então o runtime ficou coerente com a mudança
+- Validação executada:
+  - `python3 -m py_compile backend/app/agents/nodes.py` -> ok
+  - `GET /api/proxy/agents` e `GET /api/proxy/agents/{id}` -> retornaram `Íris`
+  - `GET /api/auth/session` -> confirmou a sessão usada na alteração
+  - `npm run lint` no frontend nao concluiu com o Node padrao `v12.22.12`
+  - `npm run typecheck` com Node 20 -> ok
+  - `npm run build` com Node 20 -> ok
+- Próximo passo recomendado:
+  - usar Node 20+ para os checks de frontend sempre que precisar validar esse app localmente
+
+## 2026-03-23
+- `sdr`: ajustei a abertura da agente para responder com duas mensagens iniciais fixas.
+- O que mudou nesta passada:
+  - a primeira resposta do atendimento agora sai como duas bolhas separadas:
+    - `Olá! Aqui é da Orfi Consórcios 👋`
+    - `Me conta: você está buscando imóvel ou veículo?`
+  - a regra de estilo passou a limitar emojis a uso sutil e controlado
+  - o backend agora poda emojis extras nas respostas geradas para manter o tom discreto
+  - o treino da persona/agente também recebeu essa diretriz para não regredir em futuras publicações
+- Validação executada:
+  - `python3 -m py_compile backend/app/agents/nodes.py backend/app/services/agents.py backend/app/services/training.py backend/tests/test_agent_memory.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_agent_memory.py backend/tests/test_conversation_context.py` -> `12 passed`
+- Deploy:
+  - imagem `sdr-backend:prod-20260323c` buildada no Portainer a partir do backend local
+  - stack `sdr` reaplicada com `BACKEND_IMAGE=sdr-backend:prod-20260323c`
+  - service `sdr_backend` convergiu para a imagem nova
+- Smoke em producao:
+  - exec no container vivo confirmou exatamente as duas mensagens iniciais pedidas e `reply_fragments` com as duas entradas esperadas
+- Próximo passo recomendado:
+  - acompanhar uma conversa real na chegada para garantir que o tom permaneça natural depois da abertura
+
 ## 2026-03-23
 - `sdr`: reestruturei a memória curta da conversa para slots mais robustos e genéricos.
 - O que mudou nesta passada:

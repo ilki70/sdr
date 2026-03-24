@@ -10,11 +10,12 @@ Esta pasta versiona a stack `sdr` que substitui a antiga `atendente3` no Docker 
 
 ## O que foi alinhado
 
-- Servicos atuais: `postgres`, `backend`, `frontend`, `db-admin` e `whatsapp-gateway`
+- Servicos atuais: `redis`, `postgres`, `backend`, `frontend`, `db-admin` e `whatsapp-gateway`
 - Rotas Traefik:
   - `pulse.orfi.com.br` -> `frontend`
   - `pulse-db.orfi.com.br` -> `db-admin`
 - Volumes persistentes preservando os dados antigos da stack anterior, com um volume novo para o `whatsapp-gateway` para evitar o SQLite legado corrompido
+- `redis` para o cache de contexto da conversa e suporte a tarefas assíncronas locais quando necessario
 - Variaveis de ambiente observadas nos servicos
 - Compatibilidade do manifesto com os Dockerfiles versionados neste repositório
 - Isolamento interno entre servicos de app/banco em uma rede overlay propria para evitar colisao de aliases na rede Traefik externa
@@ -61,7 +62,7 @@ Para a VPS usar as imagens do GitHub, ajuste o `.env` da stack a partir de `.env
 
 1. Ajuste um arquivo `.env` a partir de `.env.example`.
 2. Verifique que a rede externa configurada em `TRAEFIK_NETWORK` existe no Swarm.
-3. O manifesto cria uma rede overlay interna da stack para trafego entre `postgres`, `backend`, `frontend`, `db-admin` e `whatsapp-gateway`, mantendo a rede Traefik externa apenas para o que precisa passar pelo proxy.
+3. O manifesto cria uma rede overlay interna da stack para trafego entre `redis`, `postgres`, `backend`, `frontend`, `db-admin` e `whatsapp-gateway`, mantendo a rede Traefik externa apenas para o que precisa passar pelo proxy.
 4. Faça o deploy:
 
 ```bash
