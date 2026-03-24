@@ -1,6 +1,21 @@
 # Worklog
 
 ## 2026-03-24
+- `sdr`: commit e rollout da passada de confiabilidade/qualificacao foram concluídos no ambiente da stack `sdr`.
+- O que mudou nesta passada:
+  - commit local `d44fd4d` com os ajustes de abertura, captura de telefone, memoria curta e proximos passos da SDR
+  - build remoto da imagem `sdr-backend:prod-20260324-d44fd4d` via proxy Docker do Portainer
+  - stack `sdr` reaplicada com `BACKEND_IMAGE=sdr-backend:prod-20260324-d44fd4d` e `FRONTEND_IMAGE=sdr-frontend:prod-20260324-04110b8`
+  - o primeiro task do backend foi rejeitado por timing de disponibilidade da imagem (`No such image`), mas a reaplicacao seguinte convergiu limpa
+- Validacao executada:
+  - `https://pulse.orfi.com.br/health` -> `ok`
+  - service `sdr_backend` -> imagem `sdr-backend:prod-20260324-d44fd4d`, `UpdateStatus={}`
+- Observacao operacional:
+  - o `push` para `origin/main` segue bloqueado neste shell por falta de credencial GitHub HTTPS (`could not read Username for 'https://github.com'`)
+- Proximo passo recomendado:
+  - empurrar o commit `d44fd4d` para o GitHub a partir de um shell com credencial configurada e validar manualmente um fluxo real de lead ja qualificado
+
+## 2026-03-24
 - `sdr`: rodei uma bateria local de simulacoes do atendimento com foco em falhas de qualificacao e corrigi novas inconsistencias estruturais.
 - O que mudou nesta passada:
   - montei um harness local em Python para simular conversas sem depender do modelo remoto e inspecionar memoria curta, abertura fixa e `follow_up_suggestion`
