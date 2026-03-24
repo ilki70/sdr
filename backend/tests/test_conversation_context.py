@@ -184,3 +184,26 @@ def test_build_conversation_context_snapshot_maps_short_numeric_reply_to_lance_w
     assert snapshot.lance == "R$ 10mil"
     assert snapshot.last_confirmed_slot == "lance"
     assert snapshot.current_question_slot == "nao informado"
+
+
+def test_build_conversation_context_snapshot_keeps_asset_value_and_lance_from_same_message() -> None:
+    messages = [
+        {"role": "assistant", "content": "Me conta: voce esta buscando imovel ou veiculo?"},
+        {
+            "role": "user",
+            "content": "quero uma simulacao de imovel valor de 500mil, prazo 180 meses, lance de 100mil. meu nome e ilki amaro junior e cpf 00275230716",
+        },
+    ]
+
+    snapshot = conversation_context.build_conversation_context_snapshot(
+        messages,
+        tenant_id="tenant-1",
+        conversation_id="conv-3",
+        last_intent="property",
+    )
+
+    assert snapshot.asset_type == "imovel"
+    assert snapshot.asset_value == "R$ 500mil"
+    assert snapshot.timeline == "180 meses"
+    assert snapshot.lance == "R$ 100mil"
+    assert snapshot.lead_name == "Ilki Amaro Junior"

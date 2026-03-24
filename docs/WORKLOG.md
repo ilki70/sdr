@@ -1,6 +1,19 @@
 # Worklog
 
 ## 2026-03-24
+- `sdr`: corrigi uma perda objetiva de contexto na conversa quando nome, CPF, telefone, valor do bem e lance vinham na mesma troca.
+- O que mudou nesta passada:
+  - `lead_capture` passou a extrair `nome completo` mesmo em mensagens com numeros e tambem passou a capturar `telefone` diretamente do texto
+  - a memoria curta deixou de confundir `valor do bem` com `lance` quando os dois aparecem na mesma mensagem
+  - o parser de nome da memoria curta foi alinhado com o parser operacional do lead para nao perder `Ilki Amaro Junior` em mensagens com CPF
+  - entrou regressao cobrindo exatamente o padrao de simulacao com `500mil` + `180 meses` + `100mil` + `nome` + `CPF`
+- Validacao executada:
+  - `python3 -m py_compile backend/app/services/lead_capture.py backend/app/services/conversation_context.py backend/tests/test_lead_capture.py backend/tests/test_conversation_context.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q tests/test_lead_capture.py tests/test_conversation_context.py` -> `10 passed`
+- Proximo passo recomendado:
+  - publicar o backend novo na stack `sdr` e repetir o fluxo do Agent Lab para confirmar que a agente nao volta a pedir nome ou telefone depois do cadastro ja informado
+
+## 2026-03-24
 - `sdr`: fechei o pacote de captura de lead + autoaprendizado com commit local e rollout direto no Swarm.
 - O que mudou nesta passada:
   - commit local `04110b8` com as mudancas de captura obrigatoria de lead, handoff humano, memoria e historico/reversao de melhorias no `Training`

@@ -5,6 +5,9 @@ import re
 from app.models.entities import Lead
 
 
+_PHONE_CONTEXT_KEYWORDS = ("telefone", "fone", "celular", "whatsapp", "zap")
+
+
 def normalize_phone(value: str | None) -> str | None:
     if not value:
         return None
@@ -35,10 +38,10 @@ def extract_cpf(text: str) -> str | None:
 
 def extract_full_name(text: str) -> str | None:
     cleaned = " ".join(text.replace("\n", " ").split()).strip()
-    if not cleaned or any(char.isdigit() for char in cleaned):
+    if not cleaned:
         return None
     match = re.search(
-        r"\b(?:meu nome e|me chamo|sou)\s+([A-Za-zÀ-ÿ'`-]+(?:\s+[A-Za-zÀ-ÿ'`-]+){1,5})$",
+        r"\b(?:meu nome(?: completo)? e|meu nome(?: completo)? eh|me chamo|sou)\s+([A-Za-zÀ-ÿ'`-]+(?:\s+[A-Za-zÀ-ÿ'`-]+){1,5})(?=\s*(?:,|;|\.|!|\?|$|\be\b\s+(?:cpf|telefone|fone|celular|whatsapp|prazo|lance|valor|parcela|objetivo)))",
         cleaned,
         flags=re.IGNORECASE,
     )
@@ -48,6 +51,32 @@ def extract_full_name(text: str) -> str | None:
     words = cleaned.split()
     if 2 <= len(words) <= 6 and all(word.replace("-", "").replace("'", "").isalpha() for word in words):
         return " ".join(word.title() for word in words)
+    return None
+
+
+def extract_phone(text: str) -> str | None:
+    cleaned = " ".join(text.replace("\n", " ").split()).strip()
+    if not cleaned:
+        return None
+
+    contextual_match = re.search(
+        r"\b(?:telefone|fone|celular|whatsapp|zap)\b\D{0,12}(\+?\d[\d\s().-]{9,})",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    if contextual_match:
+        normalized = normalize_phone(contextual_match.group(1))
+        if normalized:
+            return normalized
+
+    candidates: list[str] = []
+    for match in re.finditer(r"\+?\d[\d\s().-]{9,}\d", cleaned):
+        normalized = normalize_phone(match.group(0))
+        if normalized and 10 <= len(normalized) <= 13:
+            candidates.append(normalized)
+    unique_candidates = list(dict.fromkeys(candidates))
+    if len(unique_candidates) == 1 and any(keyword in cleaned.lower() for keyword in _PHONE_CONTEXT_KEYWORDS):
+        return unique_candidates[0]
     return None
 
 
@@ -82,7 +111,7 @@ def apply_lead_capture(lead: Lead, *, text: str, fallback_phone: str | None = No
         lead.cpf = cpf
         changes.append("cpf")
 
-    phone = normalize_phone(fallback_phone) or normalize_phone(lead.phone)
+    phone = extract_phone(text) or normalize_phone(fallback_phone) or normalize_phone(lead.phone)
     if phone and phone != lead.phone:
         lead.phone = phone
         changes.append("telefone")

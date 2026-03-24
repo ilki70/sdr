@@ -130,6 +130,34 @@ def _extract_amount(text: str) -> str | None:
     return None
 
 
+def _extract_amount_for_keywords(text: str, keywords: tuple[str, ...]) -> str | None:
+    import re
+    import unicodedata
+
+    normalized = unicodedata.normalize("NFKD", text.lower())
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    amount_pattern = r"(\d+(?:[.,]\d+)?\s*(?:milhoes?|milhao|mil|mi|k)?|\d{2,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)"
+    keyword_pattern = "|".join(re.escape(keyword) for keyword in keywords)
+
+    patterns = [
+        rf"\b(?:{keyword_pattern})\b(?:\s+de)?\s*(?:r\$\s*)?{amount_pattern}",
+        rf"{amount_pattern}(?=\s*(?:de\s+)?(?:{keyword_pattern})\b)",
+        rf"{amount_pattern}(?=\s*(?:para\s+dar\s+de|de|como)?\s*(?:{keyword_pattern})\b)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, normalized)
+        if not match:
+            continue
+        groups = [group for group in match.groups() if group]
+        if not groups:
+            continue
+        amount = groups[-1]
+        formatted = _format_currency_like(amount)
+        if formatted:
+            return formatted
+    return None
+
+
 def _extract_timeline(text: str) -> str | None:
     import re
     import unicodedata
@@ -203,7 +231,15 @@ def _extract_lance(text: str) -> str | None:
     folded = "".join(char for char in normalized if not unicodedata.combining(char))
     if "lance" not in folded and "dar" not in folded:
         return None
-    return _extract_amount(text)
+    return _extract_amount_for_keywords(text, ("lance",))
+
+
+def _extract_asset_value(text: str) -> str | None:
+    contextual = _extract_amount_for_keywords(
+        text,
+        ("valor", "credito", "crédito", "imovel", "imovel", "apartamento", "casa", "carro", "moto", "veiculo", "veiculo"),
+    )
+    return contextual or _extract_amount(text)
 
 
 def _extract_lead_name(text: str) -> str | None:
@@ -211,7 +247,11 @@ def _extract_lead_name(text: str) -> str | None:
 
     cleaned = _clean_text(text)
     folded = _fold_text(cleaned)
-    match = re.search(r"\b(?:meu nome e|me chamo|sou)\s+([a-zà-ÿ][a-zà-ÿ'\- ]{0,40})$", cleaned, flags=re.IGNORECASE)
+    match = re.search(
+        r"\b(?:meu nome(?: completo)? e|meu nome(?: completo)? eh|me chamo|sou)\s+([A-Za-zÀ-ÿ'`-]+(?:\s+[A-Za-zÀ-ÿ'`-]+){1,5})(?=\s*(?:,|;|\.|!|\?|$|\be\b\s+(?:cpf|telefone|fone|celular|whatsapp|prazo|lance|valor|parcela|objetivo)))",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
     if match:
         candidate = _clean_text(match.group(1))
         return candidate.title() if _looks_like_name(candidate) else None
@@ -401,12 +441,19 @@ def build_conversation_context_snapshot(
                 lance = extracted_lance
                 last_confirmed_slot = "lance"
 
-            extracted_value = _extract_amount(content)
+            extracted_value = _extract_asset_value(content)
             lowered = content.lower()
             if extracted_value:
                 if "lance" in lowered:
-                    lance = extracted_value
-                    last_confirmed_slot = "lance"
+                    if extracted_value != lance and asset_value is None:
+                        asset_value = extracted_value
+                        last_confirmed_slot = "asset_value"
+                    elif expected_slot == "asset_value" and asset_value is None:
+                        asset_value = extracted_value
+                        last_confirmed_slot = "asset_value"
+                    elif lance is None:
+                        lance = extracted_value
+                        last_confirmed_slot = "lance"
                 elif expected_slot == "lance":
                     lance = extracted_value
                     last_confirmed_slot = "lance"
