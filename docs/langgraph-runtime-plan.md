@@ -4,6 +4,22 @@
 
 Substituir o motor atual de conversa do `sdr` por um runtime stateful dentro do proprio backend, usando a biblioteca `langgraph` como base e sem depender de plataforma externa ou licenca comercial.
 
+## Status
+
+Este plano continua valido como base tecnica do runtime, mas ja nao deve ser interpretado como "crescer a inteligencia dentro de um unico arquivo de runtime".
+
+Depois da analise do workflow `Isis 5`, a direcao recomendada passou a ser:
+
+- runtime mais fino
+- memoria semantica persistente
+- tools com pre-condicoes
+- debounce de mensagens
+- formatter por canal
+
+Referencia complementar:
+- [`docs/n8n-isis-conversation-patterns.md`](/home/ilki/sdr/docs/n8n-isis-conversation-patterns.md)
+- [`docs/sdr-conversation-refactor-plan.md`](/home/ilki/sdr/docs/sdr-conversation-refactor-plan.md)
+
 ## Why This Direction
 
 - evita o bloqueio de licenca visto no `Rasa CALM`

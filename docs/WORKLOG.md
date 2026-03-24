@@ -1385,3 +1385,268 @@
 ## Next Recommended Step
 - Confirmar com uma nova rodada de ociosidade real se a sessao permanece conectada sem intervencao manual.
 - Se o `last_error` voltar a aparecer apos mensagens reais, revisar separadamente o callback inbound do gateway.
+
+## 2026-03-24
+- `sdr`: evolui o `langgraph_runtime` para usar estado conversacional semantico e deixar a SDR menos mecanica.
+- O que mudou:
+  - passei a persistir `langgraph_runtime_state` no `Lead.metadata_json` junto do `slot_projection`
+  - o runtime agora carrega e atualiza `current_topic`, `conversation_mode`, `speech_act`, `last_agent_commitment` e `pending_user_request`
+  - reduzi as confirmacoes excessivas de slot unico
+  - tratei melhor entrega de simulacao e correcoes como `o q ja passei`, reaproveitando o telefone ja conhecido
+  - mantive o encerramento curto quando o lead claramente quer parar
+- Validacao:
+  - `python3 -m py_compile backend/app/services/langgraph_runtime.py backend/app/services/runtime_router.py backend/tests/test_langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py` ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_whatsapp_gateway.py` ok (`21 passed`)
+
+## Current Status
+- O runtime novo ja nao depende so de slots; ele tambem persiste o estado da situacao conversacional.
+- A SDR consegue manter melhor contexto de envio, correcao de contexto e encerramento.
+
+## Next Recommended Step
+- Rodar uma bateria de simulacoes baseada em conversas reais para endurecer transicoes comerciais mais sutis, como objecoes, impaciencia e retomada apos espera.
+- Se o comportamento local ficar bom nesses cenarios, consolidar em commit e publicar novo deploy do backend.
+
+## 2026-03-24
+- `sdr`: rodei simulacoes encadeadas do `langgraph_runtime` com casos proximos das conversas reais para encontrar perda de contexto.
+- Falhas encontradas e corrigidas:
+  - `uso proprio`, `o q ja passei` e `me envie` podiam ser capturados como `lead_name`
+  - `12 meses` e `4mil` ainda conseguiam sobrescrever `asset_value` em vez de preencher prazo/parcela
+  - depois de `sim` para a simulacao, a SDR nao entrava de forma limpa na etapa de escolha de canal
+  - depois do compromisso de envio, `nao` ainda podia reabrir o fluxo em vez de encerrar
+- Correcao aplicada:
+  - restringi captura de nome ao contexto certo
+  - tornei `budget_monthly` parte da qualificacao comercial antes do cadastro
+  - tratei `sim` apos `proposal_ready` como aceite operacional para perguntar canal de entrega
+  - tratei `nao` apos compromisso de envio como fechamento
+  - ampliei `_extract_target_use_case` para entender `uso proprio`/`uso pessoal` como `moradia`
+- Validacao:
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_whatsapp_gateway.py backend/tests/test_conversation_context.py` ok (`37 passed`)
+
+## Current Status
+- O runtime local ja reproduz de forma mais coerente a trilha: qualificacao -> parcela alvo -> cadastro -> aceite -> escolha de canal -> envio -> encerramento.
+- As simulacoes encadeadas nao mostraram mais perda basica de contexto nesses cenarios.
+
+## Next Recommended Step
+- Repetir a bateria com objecoes, irritacao e retomada depois de horas/dias usando historico real anonimizado.
+- Se o resultado continuar bom, consolidar commit e publicar novo deploy do backend.
+
+## 2026-03-24
+- `sdr`: analisei o workflow `Isis 5` do n8n para extrair os padroes que deixam a conversa mais humana e mais estavel.
+- Conclusoes principais:
+  - o ganho nao vem de mais regras de slot, e sim de memoria persistente por sessao, agregacao de mensagens, tools com pre-condicoes, handoff explicito, RAG sob demanda e pos-processamento por canal
+  - o agente central da `Isis` parece melhor porque conversa em cima de politica + memoria + tools, e nao de uma arvore grande de respostas
+- Resultado registrado em [`docs/n8n-isis-conversation-patterns.md`](/home/ilki/sdr/docs/n8n-isis-conversation-patterns.md)
+
+## Current Status
+- A direcao arquitetural mais promissora para o `sdr` agora esta mais clara: runtime mais fino, memoria melhor, tools melhores e menos micro-regras de conversa.
+
+## Next Recommended Step
+- Traduzir esse aprendizado em um plano concreto de refatoracao do `sdr`, reduzindo o peso do runtime atual e introduzindo debounce, memoria persistente semantica e tools com pre-condicoes.
+
+## 2026-03-24
+- `sdr`: formalizei o plano concreto de refatoracao da conversa em [`docs/sdr-conversation-refactor-plan.md`](/home/ilki/sdr/docs/sdr-conversation-refactor-plan.md).
+- Direcao definida:
+  - trocar a arquitetura de "runtime com muitas regras" por 5 camadas: ingestao, memoria, politica conversacional, tools e formatacao por canal
+  - manter `langgraph` como orquestrador fino, e nao como lugar de toda a inteligencia procedural
+  - reaproveitar Redis, `conversation_context`, `lead_capture`, `runtime_router` e persistencia atual
+- Tambem atualizei [`docs/langgraph-runtime-plan.md`](/home/ilki/sdr/docs/langgraph-runtime-plan.md) para refletir essa mudanca de enfoque.
+
+## Current Status
+- O projeto agora tem uma direcao tecnica mais consistente para sair da espiral de regras no runtime.
+
+## Next Recommended Step
+- Comecar a Fase 1 do plano: criar `conversation_runtime_state` persistente e adaptar o `runtime_router` para salvar e carregar esse estado de forma centralizada.
+
+## 2026-03-24
+- `sdr`: iniciei a Fase 1 do plano de refatoracao da conversa.
+- O que entrou:
+  - `runtime_router` agora persiste o estado conversacional central em `Lead.metadata_json["conversation_runtime_state"]`
+  - mantive compatibilidade com `langgraph_runtime_state` durante a transicao
+  - o `langgraph_runtime` passou a preferir o estado central novo quando ele existir
+- Validacao:
+  - `python3 -m py_compile backend/app/services/runtime_router.py backend/app/services/langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_langgraph_runtime.py` ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_messages_langgraph_runtime.py backend/tests/test_langgraph_runtime.py` ok (`24 passed`)
+
+## Current Status
+- O projeto agora ja tem um ponto unico e generico para o estado conversacional persistente, sem ficar preso ao nome do runtime atual.
+
+## Next Recommended Step
+- Continuar a Fase 1 extraindo esse estado para um modulo proprio e fazer o restante do backend consumir `conversation_runtime_state` como fonte primaria, reduzindo dependencia de `slot_projection`.
+
+## 2026-03-24
+- `sdr`: continuei a Fase 1 extraindo o estado conversacional para um modulo proprio.
+- O que entrou:
+  - novo modulo [`conversation_runtime_state.py`](/home/ilki/sdr/backend/app/services/conversation_runtime_state.py)
+  - `runtime_router` agora usa esse helper para persistir e ler estado
+  - `langgraph_runtime` passou a consumir o helper central, em vez de ler metadata diretamente
+  - testes dedicados em [`test_conversation_runtime_state.py`](/home/ilki/sdr/backend/tests/test_conversation_runtime_state.py)
+- Validacao:
+  - `python3 -m py_compile backend/app/services/conversation_runtime_state.py backend/app/services/runtime_router.py backend/app/services/langgraph_runtime.py backend/tests/test_conversation_runtime_state.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_langgraph_runtime.py` ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_conversation_runtime_state.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_langgraph_runtime.py` ok (`27 passed`)
+
+## Current Status
+- O estado conversacional persistente agora ja existe como contrato reutilizavel do backend.
+
+## Next Recommended Step
+- Fazer os pontos de entrada e de atualizacao de conversa consumirem esse contrato de forma mais explicita e, em seguida, iniciar a extracao da `conversation_policy` para tirar decisao de conversa de dentro do runtime.
+
+## 2026-03-24
+- `sdr`: iniciei a extracao da `conversation_policy`.
+- O que entrou:
+  - novo modulo [`conversation_policy.py`](/home/ilki/sdr/backend/app/services/conversation_policy.py)
+  - helpers puros de politica movidos para fora do `langgraph_runtime`:
+    - deteccao de handoff humano
+    - deteccao de encerramento
+    - mensagens de progresso de simulacao
+    - mensagens de entrega da simulacao
+    - pergunta de canal de envio
+  - testes dedicados em [`test_conversation_policy.py`](/home/ilki/sdr/backend/tests/test_conversation_policy.py)
+- Validacao:
+  - `python3 -m py_compile backend/app/services/conversation_policy.py backend/app/services/langgraph_runtime.py backend/tests/test_conversation_policy.py backend/tests/test_langgraph_runtime.py` ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_conversation_policy.py backend/tests/test_langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_conversation_runtime_state.py` ok (`32 passed`)
+
+## Current Status
+- O runtime continua funcionando, mas parte da decisao conversacional ja esta saindo para uma camada propria.
+
+## Next Recommended Step
+- Continuar a extracao da `conversation_policy`, movendo decisoes de `simulation_delivery`, `proposal_in_progress` e `closing/handoff` para funcoes mais declarativas, ate o `langgraph_runtime` ficar majoritariamente orquestrador.
+
+## 2026-03-24
+- `sdr`: avancei a extracao da `conversation_policy` ate o `langgraph_runtime` ficar majoritariamente coordenador nos ramos centrais.
+- O que mudou:
+  - criei `PolicyDecision` em [`conversation_policy.py`](/home/ilki/sdr/backend/app/services/conversation_policy.py)
+  - movi para a policy os ramos de:
+    - `closing`
+    - `handoff`
+    - `simulation_delivery`
+    - `proposal_in_progress`
+    - `objection_handling`
+  - o `langgraph_runtime` agora principalmente:
+    - monta contexto
+    - calcula sinais e faltas
+    - delega decisoes para a policy
+    - monta `LangGraphTurnResponse`
+- Medida local desta passada:
+  - `_compose_langgraph_reply` ficou com `131` linhas, bem menor e mais orquestrador do que antes
+- Validacao:
+  - `python3 -m py_compile backend/app/services/conversation_policy.py backend/app/services/langgraph_runtime.py backend/tests/test_conversation_policy.py backend/tests/test_langgraph_runtime.py` ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_conversation_policy.py backend/tests/test_langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_conversation_runtime_state.py` ok (`32 passed`)
+
+## Current Status
+- O `langgraph_runtime` ja nao concentra sozinho a maior parte das decisoes centrais de conversa.
+
+## Next Recommended Step
+- Completar a virada extraindo os ramos restantes de qualificacao, cadastro e `proposal_ready` para a policy, e depois introduzir o `channel_formatter` para tirar preocupacoes de canal do runtime.
+
+## 2026-03-24
+- `sdr`: concluida a extracao dos ramos restantes de conversa para a `conversation_policy`.
+- O que saiu do `langgraph_runtime` nesta passada:
+  - `qualification`
+  - `registration`
+  - `proposal_ready`
+- O que entrou:
+  - `qualification_decision`
+  - `registration_decision`
+  - `proposal_ready_decision`
+  em [`conversation_policy.py`](/home/ilki/sdr/backend/app/services/conversation_policy.py)
+- Medidas locais apos a passada:
+  - `_compose_langgraph_reply` caiu para `126` linhas
+  - [`langgraph_runtime.py`](/home/ilki/sdr/backend/app/services/langgraph_runtime.py) ficou com `851` linhas
+  - [`conversation_policy.py`](/home/ilki/sdr/backend/app/services/conversation_policy.py) ficou com `262` linhas
+- Validacao:
+  - `python3 -m py_compile backend/app/services/conversation_policy.py backend/app/services/langgraph_runtime.py backend/tests/test_conversation_policy.py backend/tests/test_langgraph_runtime.py` ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_conversation_policy.py backend/tests/test_langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_conversation_runtime_state.py` ok (`35 passed`)
+
+## Current Status
+- O `langgraph_runtime` agora esta majoritariamente como orquestrador.
+- A decisao conversacional principal foi movida para `conversation_policy`.
+
+## Next Recommended Step
+- Introduzir `channel_formatter` para tirar do runtime as preocupacoes de formato de saida por WhatsApp.
+- Depois disso, revisar o que ainda faz sentido manter em `langgraph_runtime` e o que pode virar tool ou helper de policy.
+
+## 2026-03-24
+- `sdr`: introduzi a camada de formatacao de canal.
+- O que entrou:
+  - novo modulo [`channel_formatter.py`](/home/ilki/sdr/backend/app/services/channel_formatter.py)
+  - `runtime_router` agora formata a saida do runtime antes de entregar `draft_reply` e `reply_fragments`
+  - para WhatsApp, respostas longas agora podem ser quebradas em fragmentos menores antes de sair do pipeline
+- Cobertura:
+  - testes dedicados em [`test_channel_formatter.py`](/home/ilki/sdr/backend/tests/test_channel_formatter.py)
+  - teste de integracao do `runtime_router` validando fragmentacao de resposta longa no canal WhatsApp em [`test_messages_langgraph_runtime.py`](/home/ilki/sdr/backend/tests/test_messages_langgraph_runtime.py)
+- Validacao:
+  - `python3 -m py_compile backend/app/services/channel_formatter.py backend/app/services/runtime_router.py backend/tests/test_channel_formatter.py backend/tests/test_messages_langgraph_runtime.py` ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_channel_formatter.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_conversation_policy.py backend/tests/test_langgraph_runtime.py backend/tests/test_conversation_runtime_state.py backend/tests/test_whatsapp_gateway.py` ok (`42 passed`)
+
+## Current Status
+- O runtime agora ja esta separado em:
+  - estado conversacional persistente
+  - policy
+  - formatter de canal
+- O `langgraph_runtime` esta mais proximo de um orquestrador de verdade.
+
+## Next Recommended Step
+- Revisar o que ainda resta no `langgraph_runtime` e extrair o que for claramente `tool/helper`, especialmente partes de extracao semantica e follow-up operacional.
+- Depois disso, consolidar commit, push e deploy quando fizer sentido.
+
+## 2026-03-24
+- `sdr`: extraí a semantica conversacional restante para um helper proprio e reduzi mais a responsabilidade direta do `langgraph_runtime`.
+- O que entrou:
+  - novo modulo [`conversation_semantics.py`](/home/ilki/sdr/backend/app/services/conversation_semantics.py)
+  - migracao de heuristicas de `speech_act`, deteccao de canal, ajuste de simulacao, deteccao de objecao, prompts/follow-ups e verificacoes de slots para essa camada
+  - alinhamento do `langgraph_runtime` para consumir apenas os helpers extraidos
+- Cobertura:
+  - testes dedicados em [`test_conversation_semantics.py`](/home/ilki/sdr/backend/tests/test_conversation_semantics.py)
+  - regressao completa mantida nas suites de runtime, policy, formatter, router e gateway
+- Validacao:
+  - `python3 -m py_compile backend/app/services/conversation_semantics.py backend/app/services/langgraph_runtime.py backend/tests/test_conversation_semantics.py` ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_conversation_semantics.py backend/tests/test_channel_formatter.py backend/tests/test_conversation_policy.py backend/tests/test_conversation_runtime_state.py backend/tests/test_langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_whatsapp_gateway.py` ok (`49 passed`)
+
+## Current Status
+- O `langgraph_runtime` esta mais proximo de um orquestrador puro:
+  - estado em `conversation_runtime_state`
+  - decisao em `conversation_policy`
+  - semantica em `conversation_semantics`
+  - formatacao em `channel_formatter`
+- A base esta pronta para a proxima etapa estrutural sem continuar inchando o runtime central.
+
+## Next Recommended Step
+- Revisar o que ainda resta no `langgraph_runtime` como composicao/bridge de contexto e, se o desenho estiver estavel, consolidar commit, push e deploy.
+- Na sequencia, partir para testes de conversa reais e endurecer a `conversation_policy`, em vez de voltar a colocar regra espalhada no runtime.
+
+## 2026-03-24
+- `sdr`: extraí a inferencia de contexto operacional restante do `langgraph_runtime`.
+- O que entrou:
+  - novo modulo [`conversation_runtime_context.py`](/home/ilki/sdr/backend/app/services/conversation_runtime_context.py)
+  - migracao de:
+    - deteccao de `proposal_commitment_state`
+    - inferencia de `last_agent_commitment`
+    - inferencia de `current_topic`
+    - inferencia de `conversation_mode`
+- Efeito pratico:
+  - [`langgraph_runtime.py`](/home/ilki/sdr/backend/app/services/langgraph_runtime.py) caiu para `574` linhas
+  - `_build_runtime_context` caiu para `57` linhas
+  - o runtime ficou mais concentrado em encadear:
+    - montagem basica do request
+    - aplicacao da mensagem aos slots
+    - refresh semantico
+    - dispatch para policy
+- Cobertura:
+  - testes dedicados em [`test_conversation_runtime_context.py`](/home/ilki/sdr/backend/tests/test_conversation_runtime_context.py)
+  - regressao completa mantida no runtime, router, formatter, policy, semantics e gateway
+- Validacao:
+  - `python3 -m py_compile backend/app/services/conversation_runtime_context.py backend/app/services/langgraph_runtime.py backend/tests/test_conversation_runtime_context.py` ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_conversation_runtime_context.py backend/tests/test_conversation_semantics.py backend/tests/test_channel_formatter.py backend/tests/test_conversation_policy.py backend/tests/test_conversation_runtime_state.py backend/tests/test_langgraph_runtime.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_whatsapp_gateway.py` ok (`57 passed`)
+
+## Current Status
+- O `langgraph_runtime` esta efetivamente majoritariamente como orquestrador.
+- A estrutura atual ficou separada em:
+  - estado persistente
+  - inferencia de contexto
+  - semantica conversacional
+  - policy
+  - formatter de canal
+
+## Next Recommended Step
+- Consolidar commit, push e deploy desta rodada estrutural.
+- Depois disso, sair da fase de refatoracao interna e voltar para o que interessa comercialmente: bater conversas reais e ajustar `conversation_policy`/prompts com evidencias do comportamento publicado.
