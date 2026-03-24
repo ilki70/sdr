@@ -275,7 +275,20 @@ def _extract_target_use_case(text: str) -> str | None:
     folded = _fold_text(text)
     if any(term in folded for term in ["investir", "investimento", "retorno", "aplicar"]):
         return "investimento"
-    if any(term in folded for term in ["morar", "moradia", "imovel proprio", "imovel próprio", "casa propria", "casa própria"]):
+    if any(
+        term in folded
+        for term in [
+            "morar",
+            "moradia",
+            "imovel proprio",
+            "imovel próprio",
+            "casa propria",
+            "casa própria",
+            "uso proprio",
+            "uso próprio",
+            "uso pessoal",
+        ]
+    ):
         return "moradia"
     if any(term in folded for term in ["trabalho", "trabalhar", "uber", "rodar", "frota"]):
         return "trabalho"

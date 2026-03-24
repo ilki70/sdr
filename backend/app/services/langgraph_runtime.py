@@ -11,8 +11,49 @@ except ImportError:  # pragma: no cover - optional dependency in this host
     StateGraph = None
 
 from app.core.config import get_settings
+from app.services.conversation_policy import (
+    PolicyDecision,
+    active_handoff_decision,
+    closing_decision,
+    detect_closing_signal,
+    detect_human_request,
+    human_handoff_decision,
+    last_assistant_message,
+    objection_decision,
+    proposal_in_progress_decision,
+    proposal_ready_decision,
+    qualification_decision,
+    registration_decision,
+    simulation_delivery_decision,
+)
+from app.services.conversation_runtime_context import (
+    infer_conversation_mode,
+    infer_current_topic,
+    infer_last_agent_commitment,
+    proposal_commitment_state,
+)
+from app.services.conversation_runtime_state import get_runtime_state
+from app.services.conversation_semantics import (
+    detect_delivery_channel,
+    detect_objection_type,
+    detect_pending_user_request,
+    detect_simulation_adjustment,
+    detect_speech_act,
+    extract_budget_monthly,
+    follow_up_for_slot,
+    has_explicit_name_intro,
+    infer_runtime_expected_slot,
+    looks_like_name_candidate,
+    looks_like_restart_question,
+    missing_business_slots,
+    missing_profile_slots,
+    objection_reply,
+    slot_confirmation,
+    slot_prompt,
+)
 from app.services.conversation_context import (
     ConversationContextSnapshot,
+    _amount_matches_timeline,
     _extract_asset_value,
     _extract_goal,
     _extract_lance,
@@ -49,6 +90,7 @@ class LangGraphTurnResponse:
     follow_up_suggestion: str | None = None
     handoff_requested: bool = False
     slot_projection: dict[str, Any] = field(default_factory=dict)
+    runtime_metadata: dict[str, Any] = field(default_factory=dict)
     runtime_label: str = "langgraph"
     flow_stage: str = "qualification"
 
@@ -64,6 +106,11 @@ class RuntimeContext:
     pipeline_status: str | None = None
     new_slots: dict[str, str] = field(default_factory=dict)
     proposal_commitment_state: str = "nenhum"
+    current_topic: str = "qualification"
+    conversation_mode: str = "collecting"
+    last_agent_commitment: str | None = None
+    pending_user_request: str | None = None
+    speech_act: str = "inform"
 
 
 def is_langgraph_runtime_enabled() -> bool:
@@ -76,6 +123,15 @@ def _extract_existing_projection(request: LangGraphTurnRequest) -> dict[str, str
     if isinstance(projection, dict):
         return {str(key): str(value) for key, value in projection.items() if isinstance(key, str) and isinstance(value, str)}
     return {}
+
+
+def _extract_existing_runtime_state(request: LangGraphTurnRequest) -> dict[str, str]:
+    state = get_runtime_state(request.lead_metadata, source="langgraph")
+    return {
+        str(key): str(value)
+        for key, value in state.items()
+        if isinstance(key, str) and isinstance(value, str) and value.strip()
+    }
 
 
 def _validated_snapshot(request: LangGraphTurnRequest) -> ConversationContextSnapshot | None:
@@ -114,44 +170,6 @@ def _extract_projection_from_snapshot(snapshot: ConversationContextSnapshot | No
     return projection
 
 
-def _infer_runtime_expected_slot(history: list[dict[str, str]]) -> str | None:
-    last_assistant_message = next(
-        (item.get("content", "") for item in reversed(history) if item.get("role") == "assistant" and item.get("content")),
-        "",
-    )
-    lowered = last_assistant_message.lower()
-    if any(token in lowered for token in ("parcela", "orçamento", "orcamento", "por mês", "por mes")):
-        return "budget_monthly"
-    return _infer_expected_slot(history)
-
-
-def _extract_budget_monthly(text: str, expected_slot: str | None) -> str | None:
-    lowered = text.lower()
-    if expected_slot != "budget_monthly" and not any(token in lowered for token in ("parcela", "orçamento", "orcamento", "por mês", "por mes")):
-        return None
-    return _extract_asset_value(text)
-
-
-def _detect_simulation_adjustment(text: str) -> str | None:
-    lowered = text.lower()
-    if any(token in lowered for token in ("maximo de parcelas", "máximo de parcelas", "maior prazo", "max parcelas", "mais parcelas")):
-        return "maximize_installments"
-    return None
-
-
-def _detect_human_request(text: str) -> bool:
-    lowered = text.lower()
-    triggers = (
-        "atendente",
-        "humano",
-        "pessoa",
-        "consultor",
-        "falar com algu",
-        "quero falar com",
-    )
-    return any(trigger in lowered for trigger in triggers)
-
-
 def _metadata_missing_profile_fields(request: LangGraphTurnRequest) -> list[str]:
     metadata = request.lead_metadata or {}
     values = metadata.get("required_profile_fields_missing")
@@ -166,36 +184,9 @@ def _metadata_pipeline_status(request: LangGraphTurnRequest) -> str | None:
     return value if isinstance(value, str) and value.strip() else None
 
 
-def _proposal_commitment_state(history: list[dict[str, str]], pipeline_status: str | None) -> str:
-    if pipeline_status in {"scheduled", "proposal_ready", "proposal", "simulation"}:
-        return "simulacao_em_andamento"
-    assistant_messages = [
-        str(item.get("content") or "").lower()
-        for item in history
-        if item.get("role") == "assistant" and item.get("content")
-    ]
-    if any(
-        token in message
-        for message in assistant_messages
-        for token in (
-            "vou preparar a simulação",
-            "vou preparar a simulacao",
-            "vou enviar a simulação",
-            "vou enviar a simulacao",
-            "proposta personalizada",
-            "proposta oficial",
-            "já estou preparando a simulação",
-            "ja estou preparando a simulacao",
-            "sigo para a simulação",
-            "sigo para a simulacao",
-        )
-    ):
-        return "simulacao_em_andamento"
-    return "nenhum"
-
-
 def _build_runtime_context(request: LangGraphTurnRequest) -> RuntimeContext:
     snapshot = _validated_snapshot(request)
+    persisted_state = _extract_existing_runtime_state(request)
     slots = _extract_projection_from_snapshot(snapshot)
     slots.update(_extract_existing_projection(request))
     if request.lead_name:
@@ -218,7 +209,7 @@ def _build_runtime_context(request: LangGraphTurnRequest) -> RuntimeContext:
         memory_notes = list(snapshot.memory_notes)
 
     pipeline_status = _metadata_pipeline_status(request)
-    return RuntimeContext(
+    runtime = RuntimeContext(
         slots=slots,
         expected_slot=expected_slot,
         last_confirmed_slot=last_confirmed_slot,
@@ -226,18 +217,39 @@ def _build_runtime_context(request: LangGraphTurnRequest) -> RuntimeContext:
         summary=summary,
         memory_notes=memory_notes,
         pipeline_status=pipeline_status,
-        proposal_commitment_state=_proposal_commitment_state(request.conversation_history, pipeline_status),
+        proposal_commitment_state=proposal_commitment_state(request.conversation_history, pipeline_status),
     )
+    runtime.last_agent_commitment = infer_last_agent_commitment(
+        request.conversation_history,
+        persisted_state.get("last_agent_commitment"),
+    )
+    runtime.current_topic = infer_current_topic(
+        persisted_topic=persisted_state.get("current_topic"),
+        pipeline_status=runtime.pipeline_status,
+        proposal_commitment_state_value=runtime.proposal_commitment_state,
+        missing_profile_fields=runtime.missing_profile_fields,
+        slots=runtime.slots,
+        expected_slot=runtime.expected_slot,
+        history=request.conversation_history,
+    )
+    runtime.conversation_mode = infer_conversation_mode(
+        current_topic=runtime.current_topic,
+        last_agent_commitment=runtime.last_agent_commitment,
+        persisted_mode=persisted_state.get("conversation_mode"),
+    )
+    runtime.pending_user_request = persisted_state.get("pending_user_request")
+    runtime.speech_act = persisted_state.get("speech_act", "inform")
+    return runtime
 
 
 def _apply_message_to_slots(runtime: RuntimeContext, request: LangGraphTurnRequest) -> RuntimeContext:
     slots = dict(runtime.slots)
     previous_slots = dict(slots)
     text = request.message_text
-    expected_slot = runtime.expected_slot or _infer_runtime_expected_slot(request.conversation_history)
+    expected_slot = runtime.expected_slot or infer_runtime_expected_slot(request.conversation_history)
 
     lead_name = extract_full_name(text)
-    if lead_name and (expected_slot == "lead_name" or not _extract_property_type(text)):
+    if lead_name and (expected_slot == "lead_name" or has_explicit_name_intro(text)) and looks_like_name_candidate(lead_name):
         slots["lead_name"] = lead_name
 
     asset_type = _extract_property_type(text)
@@ -256,14 +268,16 @@ def _apply_message_to_slots(runtime: RuntimeContext, request: LangGraphTurnReque
     timeline = _extract_timeline(text)
     lance = _extract_lance(text)
 
-    if asset_value and expected_slot != "lance":
+    if asset_value and expected_slot not in {"lance", "timeline", "budget_monthly"}:
+        slots["asset_value"] = asset_value
+    elif asset_value and expected_slot == "timeline" and timeline and not _amount_matches_timeline(asset_value, timeline):
         slots["asset_value"] = asset_value
     if timeline:
         slots["timeline"] = timeline
     if lance:
         slots["lance"] = lance
 
-    budget_monthly = _extract_budget_monthly(text, expected_slot)
+    budget_monthly = extract_budget_monthly(text, expected_slot)
     if budget_monthly:
         slots["budget_monthly"] = budget_monthly
 
@@ -275,6 +289,10 @@ def _apply_message_to_slots(runtime: RuntimeContext, request: LangGraphTurnReque
     if phone:
         slots["phone"] = phone
 
+    delivery_channel = detect_delivery_channel(text)
+    if delivery_channel:
+        slots["preferred_delivery_channel"] = delivery_channel
+
     runtime.slots = slots
     runtime.expected_slot = expected_slot
     runtime.new_slots = {
@@ -285,313 +303,224 @@ def _apply_message_to_slots(runtime: RuntimeContext, request: LangGraphTurnReque
     return runtime
 
 
-def _missing_business_slots(slots: dict[str, str]) -> list[str]:
-    ordered = ("asset_type", "goal", "asset_value", "timeline")
-    return [slot for slot in ordered if not slots.get(slot)]
+def _refresh_runtime_semantics(runtime: RuntimeContext, request: LangGraphTurnRequest) -> RuntimeContext:
+    runtime.pending_user_request = detect_pending_user_request(
+        request.message_text,
+        current_topic=runtime.current_topic,
+        last_agent_commitment=runtime.last_agent_commitment,
+    )
+    runtime.speech_act = detect_speech_act(
+        request.message_text,
+        history=request.conversation_history,
+        current_topic=runtime.current_topic,
+        last_agent_commitment=runtime.last_agent_commitment,
+    )
+
+    if runtime.pipeline_status == "handoff":
+        runtime.current_topic = "handoff"
+        runtime.conversation_mode = "handoff"
+        return runtime
+
+    if runtime.speech_act == "closing":
+        runtime.current_topic = "closing"
+        runtime.conversation_mode = "closing"
+        return runtime
+
+    if runtime.pending_user_request == "confirm_simulation":
+        runtime.current_topic = "simulation_delivery"
+        runtime.conversation_mode = "awaiting_delivery_channel"
+    elif runtime.pending_user_request in {"send_simulation", "choose_delivery_channel"} or runtime.last_agent_commitment == "send_simulation":
+        runtime.current_topic = "simulation_delivery"
+        runtime.conversation_mode = "delivering"
+    elif runtime.proposal_commitment_state == "simulacao_em_andamento":
+        runtime.current_topic = "simulation_followup"
+        runtime.conversation_mode = "advancing_simulation"
+    elif runtime.speech_act == "objection":
+        runtime.current_topic = "objection_handling"
+        runtime.conversation_mode = "handling_objection"
+    elif missing_business_slots(runtime.slots):
+        runtime.current_topic = "qualification"
+        runtime.conversation_mode = "collecting"
+    elif missing_profile_slots(missing_profile_fields=runtime.missing_profile_fields, slots=runtime.slots):
+        runtime.current_topic = "registration"
+        runtime.conversation_mode = "collecting_profile"
+    else:
+        runtime.current_topic = "proposal_ready"
+        runtime.conversation_mode = "ready_to_progress"
+    return runtime
 
 
-def _missing_profile_slots(runtime: RuntimeContext) -> list[str]:
-    if runtime.missing_profile_fields:
-        normalized = {
-            "nome_completo": "lead_name",
-            "cpf": "cpf",
-            "telefone": "phone",
-        }
-        return [normalized[item] for item in runtime.missing_profile_fields if item in normalized]
-
-    slots = runtime.slots
-    missing: list[str] = []
-    if not slots.get("lead_name"):
-        missing.append("lead_name")
-    if not slots.get("cpf"):
-        missing.append("cpf")
-    if not slots.get("phone"):
-        missing.append("phone")
-    return missing
-
-
-def _slot_prompt(slot_name: str, *, greeted: bool) -> list[str]:
-    prompts = {
-        "lead_name": [
-            "Olá! Aqui é da Orfi Consórcios.",
-            "Para eu te atender melhor, qual é o seu nome?",
-        ]
-        if not greeted
-        else ["Para eu te atender melhor, qual é o seu nome?"],
-        "asset_type": ["Você está buscando imóvel ou veículo?"],
-        "goal": ["Seu objetivo principal é morar, investir ou outro?"],
-        "asset_value": ["Qual é a faixa de valor do bem que você busca?"],
-        "timeline": ["Qual prazo faz sentido para você?"],
-        "budget_monthly": ["Qual valor de parcela mensal faz sentido para você?"],
-        "cpf": ["Antes de seguir com a simulação, preciso confirmar seu CPF."],
-        "phone": ["E qual telefone devo usar no seu cadastro?"],
+def _runtime_state_payload(runtime: RuntimeContext) -> dict[str, str]:
+    payload = {
+        "current_topic": runtime.current_topic,
+        "conversation_mode": runtime.conversation_mode,
+        "speech_act": runtime.speech_act,
     }
-    return prompts.get(slot_name, ["Me diga um pouco mais para eu seguir com você."])
+    if runtime.last_agent_commitment:
+        payload["last_agent_commitment"] = runtime.last_agent_commitment
+    if runtime.pending_user_request:
+        payload["pending_user_request"] = runtime.pending_user_request
+    if runtime.slots.get("phone") and runtime.current_topic == "simulation_delivery":
+        payload["preferred_delivery_channel"] = "whatsapp"
+    return payload
 
 
 def _has_previous_assistant_turn(request: LangGraphTurnRequest) -> bool:
     return any(item.get("role") == "assistant" for item in request.conversation_history)
 
 
-def _follow_up_for_slot(slot_name: str) -> str:
-    labels = {
-        "lead_name": "nome do lead",
-        "asset_type": "tipo de bem",
-        "goal": "objetivo principal",
-        "asset_value": "faixa de valor",
-        "timeline": "prazo",
-        "budget_monthly": "parcela mensal",
-        "cpf": "CPF",
-        "phone": "telefone",
-    }
-    return f"Capturar {labels.get(slot_name, slot_name)}."
-
-
-def _slot_confirmation(runtime: RuntimeContext) -> str | None:
-    ordered_labels = {
-        "lead_name": "nome",
-        "asset_type": "bem",
-        "goal": "objetivo",
-        "asset_value": "valor",
-        "timeline": "prazo",
-        "budget_monthly": "parcela",
-        "lance": "lance",
-        "cpf": "CPF",
-        "phone": "telefone",
-    }
-    parts: list[str] = []
-    for key in ("lead_name", "asset_type", "goal", "asset_value", "timeline", "budget_monthly", "lance", "cpf", "phone"):
-        value = runtime.new_slots.get(key)
-        if value:
-            label = ordered_labels[key]
-            parts.append(f"{label}: {value}")
-    if not parts:
-        return None
-    if len(parts) == 1:
-        return f"Perfeito, anotei {parts[0]}."
-    return f"Perfeito, anotei {'; '.join(parts[:3])}."
-
-
-def _detect_objection_type(text: str) -> str | None:
-    lowered = text.lower()
-    objection_map = {
-        "fees": ("taxa", "juros", "caro", "custa", "administracao", "administração"),
-        "trust": ("seguro", "confiar", "golpe", "medo", "confiavel", "confiável"),
-        "comparison": ("financiamento", "financiar", "comparado", "comparacao", "comparação"),
-        "lance": ("lance",),
-        "timeline": ("contemplac", "contemplação", "quando", "demora", "prazo"),
-    }
-    for objection_type, tokens in objection_map.items():
-        if any(token in lowered for token in tokens):
-            return objection_type
-    return None
-
-
-def _objection_reply(objection_type: str, runtime: RuntimeContext) -> str:
-    if objection_type == "fees":
-        return "Faz sentido olhar isso com cuidado. O melhor caminho aqui é comparar o custo total e o prazo da proposta oficial, sem prometer economia fora do cenário real."
-    if objection_type == "trust":
-        return "Sua cautela faz sentido. Eu posso te orientar com base no fluxo oficial e, antes de qualquer avanço, deixar a proposta e as condições bem claras."
-    if objection_type == "comparison":
-        return "A comparação faz sentido, mas ela depende muito do prazo, da parcela e da estratégia de contemplação. O ideal é colocar seu caso no papel antes de concluir qual caminho fica melhor."
-    if objection_type == "lance":
-        if runtime.slots.get("lance"):
-            return f"Perfeito. Considerando o lance de {runtime.slots['lance']}, eu consigo seguir a conversa sem perder esse ponto."
-        return "O lance pode acelerar bastante, mas ele precisa ser analisado junto com valor do bem, prazo e estratégia da proposta."
-    if objection_type == "timeline":
-        return "Prazo de contemplação é um ponto importante. O ideal é alinhar valor do bem, prazo e estratégia para te orientar com responsabilidade."
-    return "Entendi seu ponto. Eu vou te orientar de forma objetiva e sem prometer algo fora do contexto."
-
-
-def _proposal_progress_reply(runtime: RuntimeContext) -> list[str]:
-    slots = runtime.slots
-    if slots.get("asset_value") and slots.get("timeline") and slots.get("budget_monthly"):
-        return [
-            "Perfeito. Eu sigo com a simulação com base no que já alinhamos.",
-            f"Hoje eu tenho valor em {slots['asset_value']}, prazo em {slots['timeline']} e parcela alvo em {slots['budget_monthly']}.",
-        ]
-    if slots.get("asset_value") and slots.get("timeline"):
-        return [
-            "Perfeito. Eu sigo com a simulação com base no que já alinhamos.",
-            f"Hoje eu tenho valor em {slots['asset_value']} e prazo em {slots['timeline']}.",
-        ]
-    return ["Perfeito. Eu sigo com a simulação com base no que já alinhamos."]
-
-
-def _looks_like_restart_question(text: str) -> bool:
-    lowered = text.lower()
-    return any(
-        token in lowered
-        for token in (
-            "tudo bem",
-            "oi",
-            "ola",
-            "olá",
-            "viu minha mensagem",
-            "andou",
-            "avançou",
-            "avancou",
-        )
+def _build_runtime_response(
+    decision: PolicyDecision,
+    *,
+    slots: dict[str, str],
+    runtime: RuntimeContext,
+) -> LangGraphTurnResponse:
+    if decision.updated_last_agent_commitment:
+        runtime.last_agent_commitment = decision.updated_last_agent_commitment
+    runtime_metadata = _runtime_state_payload(runtime)
+    return LangGraphTurnResponse(
+        reply_text="\n\n".join(decision.fragments) if len(decision.fragments) > 1 else decision.fragments[0],
+        reply_fragments=decision.fragments,
+        follow_up_suggestion=decision.follow_up_suggestion,
+        handoff_requested=decision.handoff_requested,
+        slot_projection=slots,
+        runtime_metadata=runtime_metadata,
+        flow_stage=decision.flow_stage,
     )
 
 
 def _compose_langgraph_reply(runtime: RuntimeContext, request: LangGraphTurnRequest) -> LangGraphTurnResponse:
     slots = runtime.slots
-    confirmation = _slot_confirmation(runtime)
-    if _detect_human_request(request.message_text):
-        fragments = [
-            "Vou direcionar seu atendimento para um consultor humano.",
-        ]
-        return LangGraphTurnResponse(
-            reply_text="\n\n".join(fragments),
-            reply_fragments=fragments,
-            follow_up_suggestion="Assumir atendimento humano e revisar contexto capturado.",
-            handoff_requested=True,
-            slot_projection=slots,
-            flow_stage="handoff",
-        )
+    confirmation = slot_confirmation(runtime.new_slots)
+    runtime = _refresh_runtime_semantics(runtime, request)
+    runtime_metadata = _runtime_state_payload(runtime)
+    if detect_closing_signal(request.message_text, request.conversation_history):
+        return _build_runtime_response(closing_decision(), slots=slots, runtime=runtime)
+    if detect_human_request(request.message_text):
+        return _build_runtime_response(human_handoff_decision(), slots=slots, runtime=runtime)
 
     if runtime.pipeline_status == "handoff":
-        fragments = ["Seu atendimento já está com um consultor humano. Vou manter o contexto atualizado por aqui."]
-        return LangGraphTurnResponse(
-            reply_text=fragments[0],
-            reply_fragments=fragments,
-            follow_up_suggestion="Aguardar atendimento humano e revisar novas mensagens do lead.",
-            handoff_requested=True,
-            slot_projection=slots,
-            flow_stage="handoff",
+        return _build_runtime_response(active_handoff_decision(), slots=slots, runtime=runtime)
+
+    if runtime.current_topic == "simulation_delivery":
+        decision = simulation_delivery_decision(
+            slots=runtime.slots,
+            pending_user_request=runtime.pending_user_request,
+            last_agent_commitment=runtime.last_agent_commitment,
+            message_text=request.message_text,
         )
+        if decision:
+            return _build_runtime_response(decision, slots=slots, runtime=runtime)
 
     if runtime.proposal_commitment_state == "simulacao_em_andamento":
-        adjustment_type = _detect_simulation_adjustment(request.message_text)
-        if adjustment_type == "maximize_installments":
-            fragments = _proposal_progress_reply(runtime)
-            if runtime.slots.get("budget_monthly"):
-                fragments.append(
-                    f"Perfeito. Vou considerar o maior prazo possível mantendo a parcela por volta de {runtime.slots['budget_monthly']}."
-                )
-                return LangGraphTurnResponse(
-                    reply_text="\n\n".join(fragments),
-                    reply_fragments=fragments,
-                    follow_up_suggestion="Ajustar simulacao para maior prazo com a parcela mensal ja informada.",
-                    slot_projection=slots,
-                    flow_stage="proposal_in_progress",
-                )
-            fragments.append("Perfeito. Para ajustar ao maior prazo possível, me diga qual parcela mensal faz sentido para você.")
-            return LangGraphTurnResponse(
-                reply_text="\n\n".join(fragments),
-                reply_fragments=fragments,
-                follow_up_suggestion=_follow_up_for_slot("budget_monthly"),
-                slot_projection=slots,
-                flow_stage="proposal_in_progress",
-            )
-        missing_profile = _missing_profile_slots(runtime)
-        if missing_profile:
-            next_slot = missing_profile[0]
-            fragments = _proposal_progress_reply(runtime)
-            fragments.append(_slot_prompt(next_slot, greeted=True)[0])
-            return LangGraphTurnResponse(
-                reply_text="\n\n".join(fragments),
-                reply_fragments=fragments,
-                follow_up_suggestion=_follow_up_for_slot(next_slot),
-                slot_projection=slots,
-                flow_stage="proposal_in_progress",
-            )
-        if _looks_like_restart_question(request.message_text):
-            fragments = _proposal_progress_reply(runtime)
-            fragments.append("Se fizer sentido, eu sigo daqui sem reiniciar sua qualificação.")
-            return LangGraphTurnResponse(
-                reply_text="\n\n".join(fragments),
-                reply_fragments=fragments,
-                follow_up_suggestion="Seguir com simulacao sem reiniciar qualificacao.",
-                slot_projection=slots,
-                flow_stage="proposal_in_progress",
-            )
+        adjustment_type = detect_simulation_adjustment(request.message_text)
+        missing_profile = missing_profile_slots(
+            missing_profile_fields=runtime.missing_profile_fields,
+            slots=runtime.slots,
+        )
+        next_slot = missing_profile[0] if missing_profile else None
+        decision = proposal_in_progress_decision(
+            slots=runtime.slots,
+            adjustment_type=adjustment_type,
+            budget_follow_up_text=follow_up_for_slot("budget_monthly"),
+            missing_profile_prompt=slot_prompt(next_slot, greeted=True)[0] if next_slot else None,
+            missing_profile_follow_up=follow_up_for_slot(next_slot) if next_slot else None,
+            restart_question_detected=looks_like_restart_question(request.message_text),
+        )
+        if decision:
+            return _build_runtime_response(decision, slots=slots, runtime=runtime)
 
-    objection_type = _detect_objection_type(request.message_text)
+    objection_type = detect_objection_type(request.message_text)
     if objection_type:
-        missing_business = _missing_business_slots(slots)
-        base = _objection_reply(objection_type, runtime)
+        missing_business = missing_business_slots(slots)
+        base = objection_reply(objection_type, runtime.slots)
         if missing_business:
             next_slot = runtime.expected_slot or missing_business[0]
             if next_slot not in missing_business:
                 next_slot = missing_business[0]
-            ask = _slot_prompt(next_slot, greeted=True)[0]
-            fragments = [base, ask] if not confirmation else [confirmation, base, ask]
-            return LangGraphTurnResponse(
-                reply_text="\n\n".join(fragments),
-                reply_fragments=fragments,
-                follow_up_suggestion=_follow_up_for_slot(next_slot),
-                slot_projection=slots,
-                flow_stage="objection_handling",
+            return _build_runtime_response(
+                objection_decision(
+                    base_reply=base,
+                    confirmation=confirmation,
+                    next_prompt=slot_prompt(next_slot, greeted=True)[0],
+                    next_follow_up=follow_up_for_slot(next_slot),
+                ),
+                slots=slots,
+                runtime=runtime,
             )
-        if _missing_profile_slots(runtime):
-            next_slot = _missing_profile_slots(runtime)[0]
-            ask = _slot_prompt(next_slot, greeted=True)[0]
-            fragments = [base, ask] if not confirmation else [confirmation, base, ask]
-            return LangGraphTurnResponse(
-                reply_text="\n\n".join(fragments),
-                reply_fragments=fragments,
-                follow_up_suggestion=_follow_up_for_slot(next_slot),
-                slot_projection=slots,
-                flow_stage="objection_handling",
+        profile_missing = missing_profile_slots(
+            missing_profile_fields=runtime.missing_profile_fields,
+            slots=runtime.slots,
+        )
+        if profile_missing:
+            next_slot = profile_missing[0]
+            return _build_runtime_response(
+                objection_decision(
+                    base_reply=base,
+                    confirmation=confirmation,
+                    next_prompt=slot_prompt(next_slot, greeted=True)[0],
+                    next_follow_up=follow_up_for_slot(next_slot),
+                ),
+                slots=slots,
+                runtime=runtime,
             )
-        fragments = [base, "Se fizer sentido, eu sigo com a simulação a partir do que você já me passou."]
-        if confirmation:
-            fragments.insert(0, confirmation)
-        return LangGraphTurnResponse(
-            reply_text="\n\n".join(fragments),
-            reply_fragments=fragments,
-            follow_up_suggestion="Conduzir para simulacao com base no contexto ja confirmado.",
-            slot_projection=slots,
-            flow_stage="objection_handling",
+        return _build_runtime_response(
+            objection_decision(
+                base_reply=base,
+                confirmation=confirmation,
+                next_prompt=None,
+                next_follow_up=None,
+            ),
+            slots=slots,
+            runtime=runtime,
         )
 
-    missing_business = _missing_business_slots(slots)
+    missing_business = missing_business_slots(slots)
     greeted = _has_previous_assistant_turn(request)
     if missing_business:
         next_slot = runtime.expected_slot or missing_business[0]
         if next_slot not in missing_business:
             next_slot = missing_business[0]
-        fragments = _slot_prompt(next_slot, greeted=greeted)
-        if confirmation:
-            fragments = [confirmation, *fragments]
-        return LangGraphTurnResponse(
-            reply_text="\n\n".join(fragments),
-            reply_fragments=fragments,
-            follow_up_suggestion=_follow_up_for_slot(next_slot),
-            slot_projection=slots,
-            flow_stage="qualification",
+        return _build_runtime_response(
+            qualification_decision(
+                prompt_fragments=slot_prompt(next_slot, greeted=greeted),
+                follow_up_suggestion=follow_up_for_slot(next_slot),
+                confirmation=confirmation,
+            ),
+            slots=slots,
+            runtime=runtime,
         )
 
-    missing_profile = _missing_profile_slots(runtime)
+    missing_profile = missing_profile_slots(
+        missing_profile_fields=runtime.missing_profile_fields,
+        slots=runtime.slots,
+    )
     if missing_profile:
         next_slot = runtime.expected_slot or missing_profile[0]
         if next_slot not in missing_profile:
             next_slot = missing_profile[0]
-        fragments = _slot_prompt(next_slot, greeted=True)
-        if confirmation and next_slot == "lead_name":
-            fragments = [confirmation, *fragments]
-        return LangGraphTurnResponse(
-            reply_text="\n\n".join(fragments),
-            reply_fragments=fragments,
-            follow_up_suggestion=_follow_up_for_slot(next_slot),
-            slot_projection=slots,
-            flow_stage="registration",
+        return _build_runtime_response(
+            registration_decision(
+                prompt_fragments=slot_prompt(next_slot, greeted=True),
+                follow_up_suggestion=follow_up_for_slot(next_slot),
+                confirmation=confirmation,
+                next_slot=next_slot,
+            ),
+            slots=slots,
+            runtime=runtime,
         )
 
-    fragments = ["Perfeito. Com esses dados, eu sigo para a simulação."]
-    if confirmation:
-        fragments.insert(0, confirmation)
     summary = f"Lead pronto para simulacao com valor {slots['asset_value']} e prazo {slots['timeline']}."
     if runtime.summary:
         summary = f"{summary} Contexto consolidado: {runtime.summary}."
-    return LangGraphTurnResponse(
-        reply_text=fragments[0],
-        reply_fragments=fragments,
-        follow_up_suggestion=summary,
-        slot_projection=slots,
-        flow_stage="proposal_ready",
+    return _build_runtime_response(
+        proposal_ready_decision(
+            slots=slots,
+            confirmation=confirmation,
+            summary=summary,
+        ),
+        slots=slots,
+        runtime=runtime,
     )
 
 

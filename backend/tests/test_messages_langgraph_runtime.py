@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+from app.agents.state import AgentState
 from app.api.v1.messages import routes
 from app.schemas.messages import MessageSimulateRequest
 from app.services import runtime_router
+from app.services.langgraph_runtime import LangGraphTurnResponse
 
 
 class DummyDB:
@@ -28,12 +30,29 @@ def test_apply_runtime_slot_projection_updates_lead_fields() -> None:
             "asset_type": "imovel",
         },
         source="langgraph",
+        runtime_metadata={
+            "current_topic": "qualification",
+            "conversation_mode": "collecting",
+        },
     )
 
     assert lead.name == "Ilki Amaro"
     assert lead.phone == "12988162249"
     assert lead.cpf == "002.752.307-16"
     assert lead.metadata_json["langgraph_slot_projection"]["asset_type"] == "imovel"
+    assert lead.metadata_json["conversation_runtime_state"]["current_topic"] == "qualification"
+    assert lead.metadata_json["langgraph_runtime_state"]["current_topic"] == "qualification"
+
+
+def test_runtime_router_get_runtime_state_uses_central_helper() -> None:
+    lead = SimpleNamespace(
+        metadata_json={
+            "conversation_runtime_state": {"current_topic": "generic"},
+            "langgraph_runtime_state": {"current_topic": "scoped"},
+        }
+    )
+
+    assert runtime_router.get_runtime_state(lead, source="langgraph") == {"current_topic": "scoped"}
 
 
 def test_run_lab_runtime_uses_langgraph_when_feature_flag_is_enabled(monkeypatch) -> None:
@@ -86,3 +105,45 @@ def test_run_lab_runtime_uses_langgraph_when_feature_flag_is_enabled(monkeypatch
     assert state.intent == "langgraph_flow"
     assert state.reply_fragments == ["Você está buscando imóvel ou veículo?"]
     assert lead.name == "Ilki"
+
+
+def test_runtime_router_formats_long_whatsapp_reply(monkeypatch) -> None:
+    lead = SimpleNamespace(name=None, phone=None, cpf=None, metadata_json={})
+    long_fragment = (
+        "Perfeito. Vou seguir com a simulação usando o contexto que você já me passou, "
+        "sem reiniciar a conversa, e se surgir qualquer ajuste no valor, no prazo ou na parcela "
+        "você pode me chamar por aqui que eu continuo exatamente deste ponto."
+    )
+    state = AgentState(
+        tenant_id="tenant-1",
+        conversation_id="conv-1",
+        message_text="quero um imovel",
+        conversation_history=[],
+        media_context=[],
+    )
+
+    async def fake_run_message_through_langgraph(_request):
+        return LangGraphTurnResponse(
+            reply_text=long_fragment,
+            reply_fragments=[long_fragment],
+            follow_up_suggestion="Seguir com simulacao.",
+            slot_projection={"lead_name": "Ilki"},
+            runtime_metadata={},
+        )
+
+    monkeypatch.setattr(runtime_router, "is_langgraph_runtime_enabled", lambda: True)
+    monkeypatch.setattr(runtime_router, "run_message_through_langgraph", fake_run_message_through_langgraph)
+
+    runtime_state, model_name = asyncio.run(
+        runtime_router.run_configured_sales_runtime(
+            state=state,
+            tenant_id="tenant-1",
+            agent_id="agent-1",
+            lead=lead,
+            channel="whatsapp",
+        )
+    )
+
+    assert model_name == "langgraph"
+    assert len(runtime_state.reply_fragments) >= 2
+    assert runtime_state.draft_reply == "\n\n".join(runtime_state.reply_fragments)

@@ -5,6 +5,9 @@ from typing import Any
 
 from app.agents.graph import run_sales_agent
 from app.agents.state import AgentState
+from app.services.channel_formatter import format_reply
+from app.services.conversation_runtime_state import get_runtime_state as load_runtime_state
+from app.services.conversation_runtime_state import store_runtime_state
 from app.services.langgraph_runtime import (
     LangGraphTurnRequest,
     is_langgraph_runtime_enabled,
@@ -12,7 +15,18 @@ from app.services.langgraph_runtime import (
 )
 
 
-def apply_runtime_slot_projection(lead, slot_projection: dict[str, object], *, source: str) -> None:
+def get_runtime_state(lead, *, source: str | None = None) -> dict[str, object]:
+    metadata = dict(getattr(lead, "metadata_json", {}) or {})
+    return load_runtime_state(metadata, source=source)
+
+
+def apply_runtime_slot_projection(
+    lead,
+    slot_projection: dict[str, object],
+    *,
+    source: str,
+    runtime_metadata: dict[str, object] | None = None,
+) -> None:
     if not isinstance(slot_projection, dict):
         return
 
@@ -32,6 +46,8 @@ def apply_runtime_slot_projection(lead, slot_projection: dict[str, object], *, s
     metadata[f"{source}_slot_projection"] = {
         key: value for key, value in slot_projection.items() if isinstance(key, str)
     }
+    if isinstance(runtime_metadata, dict) and runtime_metadata:
+        metadata = store_runtime_state(metadata, runtime_metadata, source=source)
     lead.metadata_json = metadata
 
 
@@ -62,17 +78,24 @@ async def run_configured_sales_runtime(
                 metadata={"agent_id": agent_id, "attachments": attachment_payload},
             )
         )
-        apply_runtime_slot_projection(lead, langgraph_response.slot_projection, source="langgraph")
+        apply_runtime_slot_projection(
+            lead,
+            langgraph_response.slot_projection,
+            source="langgraph",
+            runtime_metadata=langgraph_response.runtime_metadata,
+        )
+        formatted_reply_text, formatted_fragments = format_reply(channel, langgraph_response.reply_fragments)
         runtime_state = SimpleNamespace(
             message_text=state.message_text,
-            draft_reply=langgraph_response.reply_text,
-            reply_fragments=langgraph_response.reply_fragments,
+            draft_reply=formatted_reply_text,
+            reply_fragments=formatted_fragments,
             follow_up_suggestion=langgraph_response.follow_up_suggestion,
             intent="langgraph_flow",
             confidence_score=1.0,
             media_context=state.media_context,
             handoff_requested=langgraph_response.handoff_requested,
             slot_projection=langgraph_response.slot_projection,
+            runtime_metadata=langgraph_response.runtime_metadata,
         )
         return runtime_state, langgraph_response.runtime_label
 
