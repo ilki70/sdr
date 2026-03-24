@@ -169,7 +169,7 @@ export default function TrainingPage() {
     <main className="space-y-6">
       <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-6">
         <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--accent)]">Training Lab</p>
-        <h1 className="mt-3 text-3xl font-semibold">Treino da Márcia</h1>
+        <h1 className="mt-3 text-3xl font-semibold">Treino da Íris</h1>
         <p className="mt-2 max-w-3xl text-sm text-white/70">
           Simule ciclos de atendimento, detecte pontos fracos e publique automaticamente uma nova versão da persona e do
           agente vinculado quando fizer sentido.
@@ -185,7 +185,7 @@ export default function TrainingPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold">Agente alvo</h2>
-                <p className="mt-1 text-sm text-white/60">Escolha a Márcia ou qualquer outro agente para treinar a persona vinculada.</p>
+                <p className="mt-1 text-sm text-white/60">Escolha a Íris ou qualquer outro agente para treinar a persona vinculada.</p>
               </div>
               <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/55">{agents.length} agentes</span>
             </div>
@@ -292,7 +292,7 @@ export default function TrainingPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h2 className="text-xl font-semibold">Contexto atual</h2>
-                    <p className="mt-1 text-sm text-white/60">A persona ativa da Márcia é o alvo do treinador.</p>
+                    <p className="mt-1 text-sm text-white/60">A persona ativa da Íris é o alvo do treinador.</p>
                   </div>
                   <Link
                     href={`/agents?agentId=${detail.agent.id}`}
@@ -371,7 +371,7 @@ export default function TrainingPage() {
             </>
           ) : (
             <section className="rounded-[24px] border border-white/10 bg-white/5 p-6">
-              <EmptyState title="Nenhum agente selecionado." description="Escolha a Márcia ou outro agente para iniciar o treino." />
+              <EmptyState title="Nenhum agente selecionado." description="Escolha a Íris ou outro agente para iniciar o treino." />
             </section>
           )}
         </div>
