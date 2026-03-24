@@ -41,3 +41,16 @@ def test_apply_lead_capture_extracts_phone_from_text() -> None:
     assert "telefone" in changes
     assert lead.phone == "12988162249"
     assert lead.name == "Ilki Amaro"
+
+
+def test_apply_lead_capture_extracts_phone_from_plain_numeric_reply() -> None:
+    lead = _make_lead()
+
+    changes = apply_lead_capture(
+        lead,
+        text="(12) 98816-2249",
+        fallback_phone=None,
+    )
+
+    assert "telefone" in changes
+    assert lead.phone == "12988162249"

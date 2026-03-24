@@ -77,6 +77,9 @@ def extract_phone(text: str) -> str | None:
     unique_candidates = list(dict.fromkeys(candidates))
     if len(unique_candidates) == 1 and any(keyword in cleaned.lower() for keyword in _PHONE_CONTEXT_KEYWORDS):
         return unique_candidates[0]
+    if len(unique_candidates) == 1 and re.fullmatch(r"\+?[\d\s().-]{10,}", cleaned):
+        if not normalize_cpf(cleaned):
+            return unique_candidates[0]
     return None
 
 

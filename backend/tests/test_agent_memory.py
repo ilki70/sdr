@@ -139,3 +139,102 @@ def test_compose_reply_prefers_in_memory_lead_profile(monkeypatch) -> None:
     result = asyncio.run(compose_reply(state))
 
     assert result.draft_reply == "Tudo certo, vou seguir com a simulacao."
+
+
+def test_compose_reply_skips_fixed_opening_when_first_message_has_qualification_data(monkeypatch) -> None:
+    prompts: list[str] = []
+
+    async def fake_generate_sales_reply(prompt: str) -> str:
+        prompts.append(prompt)
+        return "Perfeito. Me confirme apenas o CPF para eu seguir com a simulacao."
+
+    async def fake_runtime_context(_state):
+        return {
+            "persona_name": "Íris",
+            "tone": "consultivo",
+            "prompt_system": "",
+            "approach_rules": "",
+            "objection_playbook": "",
+            "policy_text": "",
+        }
+
+    monkeypatch.setattr("app.agents.nodes.generate_sales_reply", fake_generate_sales_reply)
+    monkeypatch.setattr("app.agents.nodes._get_agent_runtime_context", fake_runtime_context)
+
+    state = AgentState(
+        tenant_id="tenant-1",
+        conversation_id="conv-1",
+        message_text="quero um imovel de 500mil em 180 meses e tenho 100mil de lance",
+        intent="property",
+    )
+
+    result = asyncio.run(compose_reply(state))
+
+    assert result.draft_reply == "Perfeito. Me confirme apenas o CPF para eu seguir com a simulacao."
+    assert result.reply_fragments == ["Perfeito. Me confirme apenas o CPF para eu seguir com a simulacao."]
+    assert prompts
+    assert "asset_value=R$ 500mil" in prompts[0]
+    assert "lance=R$ 100mil" in prompts[0]
+
+
+def test_build_conversation_memory_keeps_value_when_same_reply_also_has_timeline() -> None:
+    history = [{"role": "assistant", "content": "Me diga o valor e o prazo desejado."}]
+
+    memory = _build_conversation_memory(history, "quero uma casa de 500mil em 180 meses")
+
+    assert memory["asset_type"] == "casa"
+    assert memory["asset_value"] == "R$ 500mil"
+    assert memory["timeline"] == "180 meses"
+    assert memory["current_question_slot"] == "nao informado"
+
+
+def test_compose_reply_follow_up_does_not_invent_lance(monkeypatch) -> None:
+    async def fake_generate_sales_reply(_prompt: str) -> str:
+        return "Perfeito."
+
+    async def fake_runtime_context(_state):
+        return {
+            "persona_name": "Íris",
+            "tone": "consultivo",
+            "prompt_system": "",
+            "approach_rules": "",
+            "objection_playbook": "",
+            "policy_text": "",
+        }
+
+    monkeypatch.setattr("app.agents.nodes.generate_sales_reply", fake_generate_sales_reply)
+    monkeypatch.setattr("app.agents.nodes._get_agent_runtime_context", fake_runtime_context)
+
+    state = AgentState(
+        tenant_id="tenant-1",
+        conversation_id="conv-1",
+        message_text="quero uma casa de 500mil em 180 meses",
+        intent="property",
+        conversation_history=[{"role": "assistant", "content": "Me diga o valor e o prazo desejado."}],
+        lead_profile=SimpleNamespace(name="Ilki Amaro", phone="12988162249", cpf="002.752.307-16", metadata_json={}),
+    )
+
+    result = asyncio.run(compose_reply(state))
+
+    assert "lance" not in (result.follow_up_suggestion or "").lower()
+    assert "valor do bem e o prazo" in (result.follow_up_suggestion or "")
+
+
+def test_build_conversation_memory_keeps_value_when_value_and_timeline_arrive_without_asset_type() -> None:
+    history = [{"role": "assistant", "content": "Me diga o valor e o prazo desejado."}]
+
+    memory = _build_conversation_memory(history, "500mil em 180 meses")
+
+    assert memory["asset_type"] == "nao informado"
+    assert memory["asset_value"] == "R$ 500mil"
+    assert memory["timeline"] == "180 meses"
+
+
+def test_build_conversation_memory_does_not_turn_timeline_into_asset_value() -> None:
+    history = [{"role": "assistant", "content": "Me diga o bem e o prazo desejado."}]
+
+    memory = _build_conversation_memory(history, "quero uma casa em 180 meses")
+
+    assert memory["asset_type"] == "casa"
+    assert memory["asset_value"] == "nao informado"
+    assert memory["timeline"] == "180 meses"

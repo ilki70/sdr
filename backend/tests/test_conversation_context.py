@@ -207,3 +207,74 @@ def test_build_conversation_context_snapshot_keeps_asset_value_and_lance_from_sa
     assert snapshot.timeline == "180 meses"
     assert snapshot.lance == "R$ 100mil"
     assert snapshot.lead_name == "Ilki Amaro Junior"
+
+
+def test_build_conversation_context_snapshot_accepts_long_full_name() -> None:
+    messages = [
+        {"role": "assistant", "content": "Qual seu nome completo?"},
+        {"role": "user", "content": "meu nome completo e Ilki Amaro de Souza Junior"},
+    ]
+
+    snapshot = conversation_context.build_conversation_context_snapshot(
+        messages,
+        tenant_id="tenant-1",
+        conversation_id="conv-4",
+        last_intent="generic",
+    )
+
+    assert snapshot.lead_name == "Ilki Amaro De Souza Junior"
+
+
+def test_build_conversation_context_snapshot_keeps_value_when_message_also_has_timeline() -> None:
+    messages = [
+        {"role": "assistant", "content": "Me diga o valor e o prazo desejado."},
+        {"role": "user", "content": "quero uma casa de 500mil em 180 meses"},
+    ]
+
+    snapshot = conversation_context.build_conversation_context_snapshot(
+        messages,
+        tenant_id="tenant-1",
+        conversation_id="conv-5",
+        last_intent="property",
+    )
+
+    assert snapshot.asset_type == "casa"
+    assert snapshot.asset_value == "R$ 500mil"
+    assert snapshot.timeline == "180 meses"
+    assert snapshot.current_question_slot == "nao informado"
+
+
+def test_build_conversation_context_snapshot_keeps_value_without_asset_type_when_value_and_timeline_arrive_together() -> None:
+    messages = [
+        {"role": "assistant", "content": "Me diga o valor e o prazo desejado."},
+        {"role": "user", "content": "500mil em 180 meses"},
+    ]
+
+    snapshot = conversation_context.build_conversation_context_snapshot(
+        messages,
+        tenant_id="tenant-1",
+        conversation_id="conv-6",
+        last_intent="property",
+    )
+
+    assert snapshot.asset_type == "nao informado"
+    assert snapshot.asset_value == "R$ 500mil"
+    assert snapshot.timeline == "180 meses"
+
+
+def test_build_conversation_context_snapshot_does_not_turn_timeline_into_asset_value() -> None:
+    messages = [
+        {"role": "assistant", "content": "Me diga o bem e o prazo desejado."},
+        {"role": "user", "content": "quero uma casa em 180 meses"},
+    ]
+
+    snapshot = conversation_context.build_conversation_context_snapshot(
+        messages,
+        tenant_id="tenant-1",
+        conversation_id="conv-7",
+        last_intent="property",
+    )
+
+    assert snapshot.asset_type == "casa"
+    assert snapshot.asset_value == "nao informado"
+    assert snapshot.timeline == "180 meses"

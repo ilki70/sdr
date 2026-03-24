@@ -244,6 +244,34 @@ def _build_initial_opening_fragments() -> list[str]:
     ]
 
 
+def _should_use_fixed_opening(state: AgentState) -> bool:
+    if any(item.get("role") == "assistant" and item.get("content") for item in state.conversation_history):
+        return False
+    if state.media_context:
+        return False
+
+    snapshot = build_conversation_context_snapshot(
+        [{"role": "user", "content": state.message_text}],
+        tenant_id=state.tenant_id,
+        conversation_id=state.conversation_id or "first-touch",
+        last_intent=state.intent,
+    )
+    has_structured_signal = any(
+        value != "nao informado"
+        for value in (
+            snapshot.lead_name,
+            snapshot.asset_type,
+            snapshot.asset_value,
+            snapshot.target_use_case,
+            snapshot.goal,
+            snapshot.timeline,
+            snapshot.lance,
+        )
+    )
+    has_non_generic_intent = snapshot.last_intent not in {"unknown", "generic"}
+    return not has_structured_signal and not has_non_generic_intent
+
+
 def _enforce_grounding_rules(state: AgentState) -> None:
     reply = state.draft_reply
     folded_reply = _fold(reply)
@@ -344,10 +372,21 @@ def _build_follow_up_suggestion(state: AgentState, persona: dict[str, str] | Non
                 return f"Proximo passo sugerido: {core}"
             return f"Para eu avancar com seguranca: {core}"
 
-    if memory["asset_type"] != "nao informado" and memory["asset_value"] != "nao informado" and memory["timeline"] != "nao informado":
+    if (
+        memory["asset_type"] != "nao informado"
+        and memory["asset_value"] != "nao informado"
+        and memory["timeline"] != "nao informado"
+        and memory["lance"] != "nao informado"
+    ):
         core = "Se fizer sentido, eu sigo com a proposta e a simulacao usando o valor do bem, o prazo e o lance que voce ja passou."
+    elif memory["asset_type"] != "nao informado" and memory["asset_value"] != "nao informado" and memory["timeline"] != "nao informado":
+        core = "Se fizer sentido, eu sigo com a simulacao usando o valor do bem e o prazo que voce ja passou."
     elif memory["asset_type"] != "nao informado" and memory["asset_value"] != "nao informado":
-        core = "Se quiser, eu sigo com a simulacao usando o valor do bem que voce ja passou."
+        core = "Me diga o prazo desejado para eu seguir com a simulacao do bem nesse valor."
+    elif memory["asset_type"] != "nao informado" and memory["timeline"] != "nao informado":
+        core = "Me diga a faixa de valor do bem para eu seguir com a simulacao nesse prazo."
+    elif memory["asset_value"] != "nao informado" and memory["timeline"] != "nao informado":
+        core = "Me diga qual bem voce busca para eu seguir com a simulacao com esse valor e prazo."
     elif "orcamento" in query or "parcela" in query or state.intent == "price":
         core = "Qual faixa de parcela cabe hoje no seu orcamento para eu montar a melhor simulacao?"
     elif "adesao" in query or "contrato" in query:
@@ -469,10 +508,7 @@ async def retrieve_context(state: AgentState) -> AgentState:
 
 
 async def compose_reply(state: AgentState) -> AgentState:
-    assistant_turn_count = sum(
-        1 for item in state.conversation_history if item.get("role") == "assistant" and item.get("content")
-    )
-    if assistant_turn_count == 0:
+    if _should_use_fixed_opening(state):
         opening_fragments = _build_initial_opening_fragments()
         state.draft_reply = "\n\n".join(opening_fragments)
         state.reply_fragments = opening_fragments
@@ -493,7 +529,7 @@ async def compose_reply(state: AgentState) -> AgentState:
         cached_context = await load_cached_conversation_context(state.tenant_id, state.conversation_id)
     if cached_context is None:
         cached_context = build_conversation_context_snapshot(
-            state.conversation_history,
+            state.conversation_history + [{"role": "user", "content": state.message_text}],
             tenant_id=state.tenant_id,
             conversation_id=state.conversation_id or "unknown",
             last_intent=state.intent,

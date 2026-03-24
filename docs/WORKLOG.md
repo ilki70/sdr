@@ -1,6 +1,39 @@
 # Worklog
 
 ## 2026-03-24
+- `sdr`: rodei uma bateria local de simulacoes do atendimento com foco em falhas de qualificacao e corrigi novas inconsistencias estruturais.
+- O que mudou nesta passada:
+  - montei um harness local em Python para simular conversas sem depender do modelo remoto e inspecionar memoria curta, abertura fixa e `follow_up_suggestion`
+  - corrigi a perda de `asset_value` quando a mesma mensagem traz valor e prazo juntos, como `quero uma casa de 500mil em 180 meses`
+  - corrigi o caso em que `500mil em 180 meses` podia perder o valor do bem por falta de tipo de ativo na mesma frase
+  - corrigi o falso positivo em que `quero uma casa em 180 meses` podia transformar o prazo em `asset_value`
+  - corrigi a limpeza do `current_question_slot` quando o lead responde mais de um slot na mesma mensagem
+  - refinei o `follow_up_suggestion` para pedir exatamente o dado faltante e para nao mencionar `lance` quando o lead ainda nao informou lance
+- Simulacoes verificadas:
+  - lead qualificado sem lance -> passou a sugerir simulacao com valor do bem e prazo, sem inventar lance
+  - proposta bloqueada por cadastro incompleto -> continuou pedindo apenas `CPF`
+  - `500mil em 180 meses` -> passou a pedir o bem faltante
+  - `quero uma casa em 180 meses` -> passou a pedir a faixa de valor faltante
+- Validacao executada:
+  - `python3 -m py_compile backend/app/services/conversation_context.py backend/app/agents/nodes.py backend/tests/test_conversation_context.py backend/tests/test_agent_memory.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_lead_capture.py backend/tests/test_conversation_context.py backend/tests/test_agent_memory.py` -> `28 passed`
+- Proximo passo recomendado:
+  - fazer uma proxima bateria local cobrindo objecoes comerciais e transicao para `handoff` humano para reduzir risco de regressao fora da qualificacao
+
+## 2026-03-24
+- `sdr`: revi o fluxo da SDR com foco em confiabilidade operacional e corrigi tres pontos que podiam desalinhar a conversa.
+- O que mudou nesta passada:
+  - a primeira resposta fixa agora so entra quando a mensagem inicial realmente e uma abertura sem sinal util; se o lead ja chega com bem, valor, prazo, lance ou intencao, a SDR responde em cima desses dados
+  - a captura de lead passou a aceitar telefone quando o lead responde apenas com o numero, sem depender de palavras como `telefone` ou `whatsapp`
+  - a memoria curta passou a aceitar nome completo com ate 6 palavras, alinhando o parser de contexto com a captura operacional do lead e reduzindo recaptura indevida
+  - o fallback de contexto no `compose_reply()` agora inclui a mensagem corrente ao montar o snapshot, evitando prompt defasado no primeiro turno do Agent Lab
+- Validacao executada:
+  - `python3 -m py_compile backend/app/services/lead_capture.py backend/app/services/conversation_context.py backend/app/agents/nodes.py backend/tests/test_lead_capture.py backend/tests/test_conversation_context.py backend/tests/test_agent_memory.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_lead_capture.py backend/tests/test_conversation_context.py backend/tests/test_agent_memory.py` -> `21 passed`
+- Proximo passo recomendado:
+  - validar manualmente dois cenarios reais: primeiro lead que ja chega com dados completos e segundo lead que responde apenas com telefone para fechar cadastro
+
+## 2026-03-24
 - `sdr`: corrigi a leitura de perfil desatualizado do lead durante a propria rodada de resposta do agente.
 - O que mudou nesta passada:
   - `AgentState` passou a carregar `lead_profile` para que o runtime use o lead ja atualizado da transacao corrente

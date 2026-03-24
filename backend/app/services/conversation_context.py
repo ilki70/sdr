@@ -75,7 +75,7 @@ def _looks_like_name(text: str) -> bool:
     if not cleaned or any(char.isdigit() for char in cleaned):
         return False
     words = cleaned.split()
-    if len(words) > 3:
+    if len(words) > 6:
         return False
     folded = _fold_text(cleaned)
     blocked = {
@@ -171,6 +171,14 @@ def _extract_timeline(text: str) -> str | None:
     if match:
         return match.group(1).replace("  ", " ").strip()
     return None
+
+
+def _amount_matches_timeline(amount: str | None, timeline: str | None) -> bool:
+    if not amount or not timeline:
+        return False
+    amount_digits = "".join(char for char in amount if char.isdigit())
+    timeline_digits = "".join(char for char in timeline if char.isdigit())
+    return bool(amount_digits and timeline_digits and amount_digits == timeline_digits)
 
 
 def _looks_like_timeline_answer(text: str) -> bool:
@@ -411,35 +419,42 @@ def build_conversation_context_snapshot(
             continue
         if role == "user":
             turn_count += 1
+            confirmed_slots_in_message: set[str] = set()
             extracted_name = _extract_lead_name(content)
             if extracted_name and (expected_slot == "lead_name" or lead_name is None):
                 lead_name = extracted_name
                 last_confirmed_slot = "lead_name"
+                confirmed_slots_in_message.add("lead_name")
 
             extracted_use_case = _extract_target_use_case(content)
             if extracted_use_case:
                 target_use_case = extracted_use_case
                 last_confirmed_slot = "target_use_case"
+                confirmed_slots_in_message.add("target_use_case")
 
             extracted_goal = _extract_goal(content)
             if extracted_goal and (expected_slot == "goal" or "quero" in content.lower() or "pretendo" in content.lower()):
                 goal = extracted_goal
                 last_confirmed_slot = "goal"
+                confirmed_slots_in_message.add("goal")
 
             extracted_type = _extract_property_type(content)
             if extracted_type:
                 asset_type = extracted_type
                 last_confirmed_slot = "asset_type"
+                confirmed_slots_in_message.add("asset_type")
 
             extracted_timeline = _extract_timeline(content)
             if extracted_timeline and (expected_slot == "timeline" or _looks_like_timeline_answer(content)):
                 timeline = extracted_timeline
                 last_confirmed_slot = "timeline"
+                confirmed_slots_in_message.add("timeline")
 
             extracted_lance = _extract_lance(content)
             if extracted_lance:
                 lance = extracted_lance
                 last_confirmed_slot = "lance"
+                confirmed_slots_in_message.add("lance")
 
             extracted_value = _extract_asset_value(content)
             lowered = content.lower()
@@ -451,23 +466,37 @@ def build_conversation_context_snapshot(
                     elif expected_slot == "asset_value" and asset_value is None:
                         asset_value = extracted_value
                         last_confirmed_slot = "asset_value"
+                        confirmed_slots_in_message.add("asset_value")
                     elif lance is None:
                         lance = extracted_value
                         last_confirmed_slot = "lance"
+                        confirmed_slots_in_message.add("lance")
                 elif expected_slot == "lance":
                     lance = extracted_value
                     last_confirmed_slot = "lance"
+                    confirmed_slots_in_message.add("lance")
                 elif expected_slot == "asset_value":
                     asset_value = extracted_value
                     last_confirmed_slot = "asset_value"
+                    confirmed_slots_in_message.add("asset_value")
+                elif (
+                    expected_slot == "timeline"
+                    and "lance" not in lowered
+                    and asset_value is None
+                    and not _amount_matches_timeline(extracted_value, extracted_timeline)
+                ):
+                    asset_value = extracted_value
+                    last_confirmed_slot = "asset_value"
+                    confirmed_slots_in_message.add("asset_value")
                 elif "lance" not in lowered and not _looks_like_timeline_answer(content):
                     asset_value = extracted_value
                     last_confirmed_slot = "asset_value"
+                    confirmed_slots_in_message.add("asset_value")
 
             if any(term in content.lower() for term in ["quero", "gostaria", "objetivo", "pretendo", "quero ver", "quero comprar"]):
                 summary_parts.append(_clean_text(content))
 
-            if expected_slot and last_confirmed_slot == expected_slot:
+            if expected_slot and expected_slot in confirmed_slots_in_message:
                 expected_slot = None
 
     extracted_slots: dict[str, str] = {}
