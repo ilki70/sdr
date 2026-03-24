@@ -114,6 +114,31 @@ def _extract_projection_from_snapshot(snapshot: ConversationContextSnapshot | No
     return projection
 
 
+def _infer_runtime_expected_slot(history: list[dict[str, str]]) -> str | None:
+    last_assistant_message = next(
+        (item.get("content", "") for item in reversed(history) if item.get("role") == "assistant" and item.get("content")),
+        "",
+    )
+    lowered = last_assistant_message.lower()
+    if any(token in lowered for token in ("parcela", "orçamento", "orcamento", "por mês", "por mes")):
+        return "budget_monthly"
+    return _infer_expected_slot(history)
+
+
+def _extract_budget_monthly(text: str, expected_slot: str | None) -> str | None:
+    lowered = text.lower()
+    if expected_slot != "budget_monthly" and not any(token in lowered for token in ("parcela", "orçamento", "orcamento", "por mês", "por mes")):
+        return None
+    return _extract_asset_value(text)
+
+
+def _detect_simulation_adjustment(text: str) -> str | None:
+    lowered = text.lower()
+    if any(token in lowered for token in ("maximo de parcelas", "máximo de parcelas", "maior prazo", "max parcelas", "mais parcelas")):
+        return "maximize_installments"
+    return None
+
+
 def _detect_human_request(text: str) -> bool:
     lowered = text.lower()
     triggers = (
@@ -209,7 +234,7 @@ def _apply_message_to_slots(runtime: RuntimeContext, request: LangGraphTurnReque
     slots = dict(runtime.slots)
     previous_slots = dict(slots)
     text = request.message_text
-    expected_slot = runtime.expected_slot or _infer_expected_slot(request.conversation_history)
+    expected_slot = runtime.expected_slot or _infer_runtime_expected_slot(request.conversation_history)
 
     lead_name = extract_full_name(text)
     if lead_name and (expected_slot == "lead_name" or not _extract_property_type(text)):
@@ -237,6 +262,10 @@ def _apply_message_to_slots(runtime: RuntimeContext, request: LangGraphTurnReque
         slots["timeline"] = timeline
     if lance:
         slots["lance"] = lance
+
+    budget_monthly = _extract_budget_monthly(text, expected_slot)
+    if budget_monthly:
+        slots["budget_monthly"] = budget_monthly
 
     cpf = extract_cpf(text)
     if cpf:
@@ -293,6 +322,7 @@ def _slot_prompt(slot_name: str, *, greeted: bool) -> list[str]:
         "goal": ["Seu objetivo principal é morar, investir ou outro?"],
         "asset_value": ["Qual é a faixa de valor do bem que você busca?"],
         "timeline": ["Qual prazo faz sentido para você?"],
+        "budget_monthly": ["Qual valor de parcela mensal faz sentido para você?"],
         "cpf": ["Antes de seguir com a simulação, preciso confirmar seu CPF."],
         "phone": ["E qual telefone devo usar no seu cadastro?"],
     }
@@ -310,6 +340,7 @@ def _follow_up_for_slot(slot_name: str) -> str:
         "goal": "objetivo principal",
         "asset_value": "faixa de valor",
         "timeline": "prazo",
+        "budget_monthly": "parcela mensal",
         "cpf": "CPF",
         "phone": "telefone",
     }
@@ -323,12 +354,13 @@ def _slot_confirmation(runtime: RuntimeContext) -> str | None:
         "goal": "objetivo",
         "asset_value": "valor",
         "timeline": "prazo",
+        "budget_monthly": "parcela",
         "lance": "lance",
         "cpf": "CPF",
         "phone": "telefone",
     }
     parts: list[str] = []
-    for key in ("lead_name", "asset_type", "goal", "asset_value", "timeline", "lance", "cpf", "phone"):
+    for key in ("lead_name", "asset_type", "goal", "asset_value", "timeline", "budget_monthly", "lance", "cpf", "phone"):
         value = runtime.new_slots.get(key)
         if value:
             label = ordered_labels[key]
@@ -373,6 +405,11 @@ def _objection_reply(objection_type: str, runtime: RuntimeContext) -> str:
 
 def _proposal_progress_reply(runtime: RuntimeContext) -> list[str]:
     slots = runtime.slots
+    if slots.get("asset_value") and slots.get("timeline") and slots.get("budget_monthly"):
+        return [
+            "Perfeito. Eu sigo com a simulação com base no que já alinhamos.",
+            f"Hoje eu tenho valor em {slots['asset_value']}, prazo em {slots['timeline']} e parcela alvo em {slots['budget_monthly']}.",
+        ]
     if slots.get("asset_value") and slots.get("timeline"):
         return [
             "Perfeito. Eu sigo com a simulação com base no que já alinhamos.",
@@ -426,6 +463,28 @@ def _compose_langgraph_reply(runtime: RuntimeContext, request: LangGraphTurnRequ
         )
 
     if runtime.proposal_commitment_state == "simulacao_em_andamento":
+        adjustment_type = _detect_simulation_adjustment(request.message_text)
+        if adjustment_type == "maximize_installments":
+            fragments = _proposal_progress_reply(runtime)
+            if runtime.slots.get("budget_monthly"):
+                fragments.append(
+                    f"Perfeito. Vou considerar o maior prazo possível mantendo a parcela por volta de {runtime.slots['budget_monthly']}."
+                )
+                return LangGraphTurnResponse(
+                    reply_text="\n\n".join(fragments),
+                    reply_fragments=fragments,
+                    follow_up_suggestion="Ajustar simulacao para maior prazo com a parcela mensal ja informada.",
+                    slot_projection=slots,
+                    flow_stage="proposal_in_progress",
+                )
+            fragments.append("Perfeito. Para ajustar ao maior prazo possível, me diga qual parcela mensal faz sentido para você.")
+            return LangGraphTurnResponse(
+                reply_text="\n\n".join(fragments),
+                reply_fragments=fragments,
+                follow_up_suggestion=_follow_up_for_slot("budget_monthly"),
+                slot_projection=slots,
+                flow_stage="proposal_in_progress",
+            )
         missing_profile = _missing_profile_slots(runtime)
         if missing_profile:
             next_slot = missing_profile[0]

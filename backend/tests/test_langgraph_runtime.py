@@ -256,3 +256,51 @@ def test_langgraph_runtime_requests_only_missing_profile_field_during_simulation
 
     assert response.flow_stage == "proposal_in_progress"
     assert response.reply_fragments[-1] == "Antes de seguir com a simulação, preciso confirmar seu CPF."
+
+
+def test_langgraph_runtime_adjusts_simulation_to_max_installments_without_reasking_budget() -> None:
+    response = __import__("asyncio").run(
+        run_message_through_langgraph(
+            LangGraphTurnRequest(
+                tenant_id="tenant-1",
+                conversation_id="conv-1",
+                message_text="quero o maximo de parcelas",
+                lead_name="Ilki Amaro",
+                lead_phone="12988162249",
+                lead_cpf="002.752.307-16",
+                lead_metadata={
+                    "langgraph_slot_projection": {
+                        "lead_name": "Ilki Amaro",
+                        "asset_type": "imovel",
+                        "goal": "moradia",
+                        "asset_value": "R$ 500mil",
+                        "timeline": "1 ano",
+                        "budget_monthly": "R$ 3mil",
+                        "lance": "R$ 100mil",
+                    },
+                    "pipeline_status": "scheduled",
+                },
+            )
+        )
+    )
+
+    assert response.flow_stage == "proposal_in_progress"
+    assert "maior prazo possível" in response.reply_fragments[-1] or "maior prazo possivel" in response.reply_fragments[-1].lower()
+    assert "R$ 3mil" in response.reply_fragments[-1]
+
+
+def test_langgraph_runtime_stores_budget_monthly_when_prompted() -> None:
+    response = __import__("asyncio").run(
+        run_message_through_langgraph(
+            LangGraphTurnRequest(
+                tenant_id="tenant-1",
+                conversation_id="conv-1",
+                message_text="3mil",
+                conversation_history=[
+                    {"role": "assistant", "content": "Qual valor de parcela mensal faz sentido para você?"},
+                ],
+            )
+        )
+    )
+
+    assert response.slot_projection["budget_monthly"] == "R$ 3mil"
