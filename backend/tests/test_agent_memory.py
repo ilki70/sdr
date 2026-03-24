@@ -1,4 +1,5 @@
 import asyncio
+from types import SimpleNamespace
 
 from app.agents.nodes import _build_conversation_memory
 from app.agents.nodes import _build_initial_opening_fragments
@@ -92,3 +93,49 @@ def test_limit_emojis_keeps_reply_discreet() -> None:
     assert "👋" in text
     assert "✅" not in text
     assert "🚀" not in text
+
+
+def test_compose_reply_prefers_in_memory_lead_profile(monkeypatch) -> None:
+    async def fake_generate_sales_reply(prompt: str) -> str:
+        assert "telefone=12988162249" in prompt
+        assert "status=cadastro_obrigatorio_completo" in prompt
+        return "Tudo certo, vou seguir com a simulacao."
+
+    async def fail_load_lead(_state):  # pragma: no cover
+        raise AssertionError("compose_reply should use the lead already attached to the state")
+
+    monkeypatch.setattr("app.agents.nodes.generate_sales_reply", fake_generate_sales_reply)
+    monkeypatch.setattr("app.agents.nodes._load_lead_for_state", fail_load_lead)
+    async def fake_runtime_context(_state):
+        return {
+            "persona_name": "Íris",
+            "tone": "consultivo",
+            "prompt_system": "",
+            "approach_rules": "",
+            "objection_playbook": "",
+            "policy_text": "",
+        }
+
+    monkeypatch.setattr("app.agents.nodes._get_agent_runtime_context", fake_runtime_context)
+
+    lead = SimpleNamespace(
+        name="Ilki Amaro",
+        phone="12988162249",
+        cpf="002.752.307-16",
+        metadata_json={},
+    )
+    state = AgentState(
+        tenant_id="tenant-1",
+        conversation_id="conv-1",
+        lead_id="lead-1",
+        message_text="dar um lance de 100mil",
+        intent="lance",
+        conversation_history=[
+            {"role": "assistant", "content": "Qual o valor de lance que voce pretende oferecer?"},
+        ],
+        lead_profile=lead,
+    )
+
+    result = asyncio.run(compose_reply(state))
+
+    assert result.draft_reply == "Tudo certo, vou seguir com a simulacao."

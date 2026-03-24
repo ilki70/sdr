@@ -320,6 +320,7 @@ async def handle_inbound_whatsapp_message(
             }
             for message in history[:-1]
         ],
+        lead_profile=lead,
     )
     state = await run_sales_agent(state)
 

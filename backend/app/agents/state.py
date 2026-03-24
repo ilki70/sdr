@@ -19,6 +19,7 @@ class AgentState:
     conversation_history: list[dict[str, str]] = field(default_factory=list)
     conversation_context: dict[str, Any] = field(default_factory=dict)
     media_context: list[str] = field(default_factory=list)
+    lead_profile: Any | None = None
     next_action: str = "respond"
     draft_reply: str = ""
     reply_fragments: list[str] = field(default_factory=list)

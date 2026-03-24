@@ -503,7 +503,9 @@ async def compose_reply(state: AgentState) -> AgentState:
     new_facts = _build_conversation_delta(previous_memory, memory)
     new_facts_block = ", ".join(new_facts) if new_facts else "nenhum dado novo estruturado"
     runtime = await _get_agent_runtime_context(state)
-    lead_profile = await _load_lead_for_state(state)
+    lead_profile = getattr(state, "lead_profile", None)
+    if lead_profile is None:
+        lead_profile = await _load_lead_for_state(state)
     state.lead_profile = lead_profile
     structured_context_block = format_conversation_context_for_prompt(cached_context)
     lead_profile_block = _format_lead_profile_block(lead_profile)

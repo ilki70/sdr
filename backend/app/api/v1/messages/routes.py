@@ -71,6 +71,7 @@ async def _prepare_state(
             for message in history
         ],
         media_context=media_notes,
+        lead_profile=lead,
     )
     return state, conversation.id
 

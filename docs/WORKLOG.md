@@ -1,6 +1,19 @@
 # Worklog
 
 ## 2026-03-24
+- `sdr`: corrigi a leitura de perfil desatualizado do lead durante a propria rodada de resposta do agente.
+- O que mudou nesta passada:
+  - `AgentState` passou a carregar `lead_profile` para que o runtime use o lead ja atualizado da transacao corrente
+  - `compose_reply()` agora prefere o `lead_profile` presente no estado em vez de abrir uma nova sessao e reler um registro possivelmente antigo
+  - os fluxos de `agent-lab`, `whatsapp-service` e `whatsapp-gateway` passaram a injetar o `lead` atualizado no estado antes de chamar o agente
+  - entrou regressao garantindo que a resposta usa o telefone ja capturado no estado e nao tenta reler o lead no banco durante a mesma rodada
+- Validacao executada:
+  - `python3 -m py_compile backend/app/agents/state.py backend/app/agents/nodes.py backend/app/api/v1/messages/routes.py backend/app/services/whatsapp.py backend/app/services/whatsapp_gateway.py backend/tests/test_agent_memory.py` -> ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q tests/test_lead_capture.py tests/test_conversation_context.py tests/test_agent_memory.py` -> `18 passed`
+- Proximo passo recomendado:
+  - publicar o backend novo e repetir o fluxo em que o lead informa telefone e depois lance para confirmar que o agente nao volta a pedir telefone
+
+## 2026-03-24
 - `sdr`: corrigi uma perda objetiva de contexto na conversa quando nome, CPF, telefone, valor do bem e lance vinham na mesma troca.
 - O que mudou nesta passada:
   - `lead_capture` passou a extrair `nome completo` mesmo em mensagens com numeros e tambem passou a capturar `telefone` diretamente do texto

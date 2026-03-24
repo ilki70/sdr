@@ -429,6 +429,7 @@ async def process_whatsapp_inbound(db: AsyncSession, payload: WhatsAppInboundReq
         conversation_history=history,
         conversation_context=conversation_context.model_dump(),
         media_context=media_notes,
+        lead_profile=lead,
     )
     state = await run_sales_agent(state)
 
