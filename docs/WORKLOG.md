@@ -1785,8 +1785,27 @@
 
 ## Current Status
 - O projeto agora suporta login por email/senha e por Google, ambos convergindo para a mesma sessao interna do frontend.
-- Ainda falta configurar `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` no ambiente antes de publicar.
+- O login Google ja foi configurado no ambiente publicado da stack `sdr`.
 
 ## Next Recommended Step
-- Configurar as credenciais OAuth do Google no frontend, incluindo redirect URI para `/api/auth/google/callback`.
-- Depois disso, fazer commit, push e deploy da rodada e validar o fluxo no ambiente publicado.
+- Validar o fluxo completo de login via navegador com uma conta Google autorizada no projeto OAuth.
+- Se o deploy estiver estavel, rotacionar o `GOOGLE_CLIENT_SECRET`, porque ele foi compartilhado em texto aberto durante a sessao.
+
+## 2026-03-25
+- `sdr`: consolidado commit, push e deploy da rodada de login com Google.
+- Commits publicados:
+  - `2e76bcc` `feat: add google login to sdr auth`
+  - `29b2169` `fix: wrap login search params in suspense`
+- Publicacao:
+  - `main` enviado ao GitHub com sucesso
+  - workflow `Build atendente3 images` concluiu com sucesso para o commit `29b2169bb1fdb9752fb27d184f13deafe38d1877`
+- Deploy:
+  - stack `sdr` reaplicada via Portainer (`stack id 35`, `endpointId 1`) usando [`deploy/atendente3/stack.yml`](/home/ilki/sdr/deploy/atendente3/stack.yml)
+  - `BACKEND_IMAGE=ghcr.io/ilki70/sdr/backend:29b2169bb1fdb9752fb27d184f13deafe38d1877`
+  - `FRONTEND_IMAGE=ghcr.io/ilki70/sdr/frontend:29b2169bb1fdb9752fb27d184f13deafe38d1877`
+  - `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` adicionados ao ambiente da stack
+- Validacao:
+  - `backend/tests/test_auth_google.py` -> `2 passed`
+  - `npm run typecheck` ok com Node 20
+  - `sdr_backend`, `sdr_worker` e `sdr_frontend` convergiram com `UpdateStatus=completed`
+  - `GET https://pulse.orfi.com.br/api/auth/providers` agora retorna o provider `google`
