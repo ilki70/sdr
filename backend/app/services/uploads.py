@@ -1,11 +1,13 @@
 from hashlib import sha256
+import os
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile, status
 
 MAX_SIZE_BYTES = 20 * 1024 * 1024
-UPLOAD_ROOT = Path("uploads")
+DEFAULT_UPLOAD_ROOT = Path("/data/uploads") if Path("/data").exists() else Path("uploads")
+UPLOAD_ROOT = Path(os.getenv("UPLOAD_ROOT", str(DEFAULT_UPLOAD_ROOT)))
 ALLOWED_MIME_TYPES = {
     "application/pdf",
     "application/msword",

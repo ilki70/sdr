@@ -1809,3 +1809,43 @@
   - `npm run typecheck` ok com Node 20
   - `sdr_backend`, `sdr_worker` e `sdr_frontend` convergiram com `UpdateStatus=completed`
   - `GET https://pulse.orfi.com.br/api/auth/providers` agora retorna o provider `google`
+
+## 2026-03-25
+- `sdr`: corrigido drift de schema no dashboard publicado.
+- Causa:
+  - o codigo em producao ja dependia das colunas `conversations.pipeline_status`, `summary` e `next_step`, mas o Postgres da stack ainda nao tinha recebido a migration [`007_conversation_pipeline_fields.py`](/home/ilki/sdr/backend/alembic/versions/007_conversation_pipeline_fields.py)
+- O que mudou:
+  - [`deploy/atendente3/stack.yml`](/home/ilki/sdr/deploy/atendente3/stack.yml) e [`deploy/sdr/stack.yml`](/home/ilki/sdr/deploy/sdr/stack.yml) agora sobem o `backend` com `alembic upgrade head && uvicorn ...`
+  - stack `sdr` reaplicada via Portainer mantendo as imagens atuais do commit `29b2169bb1fdb9752fb27d184f13deafe38d1877`
+- Validacao:
+  - `sdr_backend` convergiu com `UpdateStatus=completed`
+  - o endpoint do dashboard deixou de retornar `500` publico; sem sessao agora responde `401`, que e o esperado
+
+## Current Status
+- A stack publicada agora executa migrations automaticamente no startup do `backend`.
+- O erro `column conversations.pipeline_status does not exist` deve estar resolvido no ambiente publicado.
+
+## Next Recommended Step
+- Validar no navegador autenticado se o dashboard abriu normalmente apos o redeploy.
+- Commitar e publicar a alteracao dos manifests de deploy para nao perder esse bootstrap de migration em futuras reaplicacoes.
+
+## 2026-03-25
+- `sdr`: corrigido o caminho de uploads para ingestao de documentos na base de conhecimento.
+- Causa:
+  - o upload era salvo em `uploads/...` dentro do container que recebia o POST
+  - a ingestao rodava no `worker`, outro container, sem esse mesmo filesystem local
+  - o job acabava falhando com `404: Arquivo local nao encontrado`
+- O que mudou:
+  - [`backend/app/services/uploads.py`](/home/ilki/sdr/backend/app/services/uploads.py) agora usa `UPLOAD_ROOT` compartilhado, preferindo `/data/uploads`
+  - [`backend/app/services/knowledge.py`](/home/ilki/sdr/backend/app/services/knowledge.py) passou a resolver `uploads/...` tambem dentro do storage compartilhado
+  - adicionada regressao em [`backend/tests/test_upload_paths.py`](/home/ilki/sdr/backend/tests/test_upload_paths.py)
+- Validacao:
+  - `python3 -m py_compile backend/app/services/uploads.py backend/app/services/knowledge.py backend/tests/test_upload_paths.py` ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_upload_paths.py backend/tests/test_knowledge_youtube.py` ok (`4 passed`)
+
+## Current Status
+- Novos uploads de documentos devem ficar acessiveis tanto para `backend` quanto para `worker` na stack publicada.
+- Jobs antigos que ja falharam por caminho local perdido podem precisar ser reenviados.
+
+## Next Recommended Step
+- Publicar o backend/worker com essa correcao e testar um novo upload de documento no ambiente publicado.

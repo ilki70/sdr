@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qs, quote_plus, urlparse
 from uuid import uuid4
+import os
 
 import httpx
 from fastapi import HTTPException, status
@@ -31,6 +32,8 @@ except ImportError:  # pragma: no cover - optional dependency in local/dev envir
 logger = logging.getLogger(__name__)
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_UPLOAD_ROOT = Path("/data/uploads") if Path("/data").exists() else PROJECT_ROOT / "uploads"
+UPLOAD_ROOT = Path(os.getenv("UPLOAD_ROOT", str(DEFAULT_UPLOAD_ROOT)))
 YOUTUBE_TRANSCRIPT_LANGUAGES = ("pt-BR", "pt", "en")
 
 TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
@@ -215,12 +218,14 @@ def _resolve_local_path(source_ref: str) -> Path | None:
     if raw_path.is_absolute():
         candidates.append(raw_path)
     else:
+        upload_relative = Path(*raw_path.parts[1:]) if raw_path.parts and raw_path.parts[0] == "uploads" else raw_path
         candidates.extend(
             [
                 raw_path,
                 Path.cwd() / raw_path,
                 BACKEND_ROOT / raw_path,
                 PROJECT_ROOT / raw_path,
+                UPLOAD_ROOT / upload_relative,
             ]
         )
 
