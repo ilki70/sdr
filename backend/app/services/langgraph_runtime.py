@@ -51,6 +51,7 @@ from app.services.conversation_semantics import (
     slot_confirmation,
     slot_prompt,
 )
+from app.services.conversation_turn_interpreter import interpret_turn_semantics
 from app.services.conversation_context import (
     ConversationContextSnapshot,
     _amount_matches_timeline,
@@ -111,11 +112,18 @@ class RuntimeContext:
     last_agent_commitment: str | None = None
     pending_user_request: str | None = None
     speech_act: str = "inform"
+    objection_type: str | None = None
+    adjustment_type: str | None = None
 
 
 def _policy_context(request: LangGraphTurnRequest) -> dict[str, Any] | None:
     value = request.metadata.get("policy_context")
     return value if isinstance(value, dict) else None
+
+
+def _semantic_interpretation(request: LangGraphTurnRequest) -> dict[str, Any]:
+    value = request.metadata.get("semantic_interpretation")
+    return value if isinstance(value, dict) else {}
 
 
 def is_langgraph_runtime_enabled() -> bool:
@@ -252,50 +260,77 @@ def _apply_message_to_slots(runtime: RuntimeContext, request: LangGraphTurnReque
     previous_slots = dict(slots)
     text = request.message_text
     expected_slot = runtime.expected_slot or infer_runtime_expected_slot(request.conversation_history)
+    semantic = _semantic_interpretation(request)
+    semantic_slots = semantic.get("slot_updates") if isinstance(semantic.get("slot_updates"), dict) else {}
+
+    for key, value in semantic_slots.items():
+        if isinstance(key, str) and isinstance(value, str) and value.strip():
+            slots[key] = value
 
     lead_name = extract_full_name(text)
-    if lead_name and (expected_slot == "lead_name" or has_explicit_name_intro(text)) and looks_like_name_candidate(lead_name):
+    if (
+        "lead_name" not in semantic_slots
+        and lead_name
+        and (expected_slot == "lead_name" or has_explicit_name_intro(text))
+        and looks_like_name_candidate(lead_name)
+    ):
         slots["lead_name"] = lead_name
 
     asset_type = _extract_property_type(text)
-    if asset_type:
+    if asset_type and "asset_type" not in semantic_slots:
         slots["asset_type"] = asset_type
 
     target_use_case = _extract_target_use_case(text)
-    if target_use_case:
+    if target_use_case and "goal" not in semantic_slots:
         slots["goal"] = target_use_case
 
     extracted_goal = _extract_goal(text)
-    if extracted_goal and "goal" not in slots and expected_slot == "goal":
+    if extracted_goal and "goal" not in slots and "goal" not in semantic_slots and expected_slot == "goal":
         slots["goal"] = extracted_goal
 
     asset_value = _extract_asset_value(text)
     timeline = _extract_timeline(text)
     lance = _extract_lance(text)
 
-    if asset_value and expected_slot not in {"lance", "timeline", "budget_monthly"}:
+    if expected_slot == "lance" and asset_value and not lance and "lance" not in semantic_slots:
+        lance = asset_value
+
+    if asset_value and timeline and _amount_matches_timeline(asset_value, timeline):
+        asset_value = None
+    elif asset_value and lance and asset_value == lance and expected_slot != "asset_value":
+        asset_value = None
+    elif asset_value and slots.get("lance") and asset_value == slots.get("lance") and expected_slot in {"lead_name", "cpf", "phone"}:
+        asset_value = None
+
+    if asset_value and "asset_value" not in semantic_slots and expected_slot not in {"lance", "timeline", "budget_monthly"}:
         slots["asset_value"] = asset_value
-    elif asset_value and expected_slot == "timeline" and timeline and not _amount_matches_timeline(asset_value, timeline):
+    elif (
+        asset_value
+        and "asset_value" not in semantic_slots
+        and expected_slot == "timeline"
+        and timeline
+        and not _amount_matches_timeline(asset_value, timeline)
+    ):
         slots["asset_value"] = asset_value
-    if timeline:
+    if timeline and "timeline" not in semantic_slots:
         slots["timeline"] = timeline
-    if lance:
+    if lance and "lance" not in semantic_slots:
         slots["lance"] = lance
 
     budget_monthly = extract_budget_monthly(text, expected_slot)
-    if budget_monthly:
+    if budget_monthly and "budget_monthly" not in semantic_slots:
         slots["budget_monthly"] = budget_monthly
 
     cpf = extract_cpf(text)
-    if cpf:
+    if cpf and "cpf" not in semantic_slots:
         slots["cpf"] = cpf
 
     phone = extract_phone(text)
-    if phone:
+    if phone and "phone" not in semantic_slots:
         slots["phone"] = phone
 
     delivery_channel = detect_delivery_channel(text)
-    if delivery_channel:
+    if delivery_channel and "preferred_delivery_channel" not in semantic_slots:
         slots["preferred_delivery_channel"] = delivery_channel
 
     runtime.slots = slots
@@ -309,16 +344,35 @@ def _apply_message_to_slots(runtime: RuntimeContext, request: LangGraphTurnReque
 
 
 def _refresh_runtime_semantics(runtime: RuntimeContext, request: LangGraphTurnRequest) -> RuntimeContext:
-    runtime.pending_user_request = detect_pending_user_request(
-        request.message_text,
-        current_topic=runtime.current_topic,
-        last_agent_commitment=runtime.last_agent_commitment,
+    semantic = _semantic_interpretation(request)
+    runtime.pending_user_request = (
+        semantic.get("pending_user_request")
+        if isinstance(semantic.get("pending_user_request"), str) and semantic.get("pending_user_request")
+        else detect_pending_user_request(
+            request.message_text,
+            current_topic=runtime.current_topic,
+            last_agent_commitment=runtime.last_agent_commitment,
+        )
     )
-    runtime.speech_act = detect_speech_act(
-        request.message_text,
-        history=request.conversation_history,
-        current_topic=runtime.current_topic,
-        last_agent_commitment=runtime.last_agent_commitment,
+    runtime.speech_act = (
+        semantic.get("speech_act")
+        if isinstance(semantic.get("speech_act"), str) and semantic.get("speech_act")
+        else detect_speech_act(
+            request.message_text,
+            history=request.conversation_history,
+            current_topic=runtime.current_topic,
+            last_agent_commitment=runtime.last_agent_commitment,
+        )
+    )
+    runtime.objection_type = (
+        semantic.get("objection_type")
+        if isinstance(semantic.get("objection_type"), str) and semantic.get("objection_type")
+        else detect_objection_type(request.message_text)
+    )
+    runtime.adjustment_type = (
+        semantic.get("adjustment_type")
+        if isinstance(semantic.get("adjustment_type"), str) and semantic.get("adjustment_type")
+        else detect_simulation_adjustment(request.message_text)
     )
 
     if runtime.pipeline_status == "handoff":
@@ -419,7 +473,6 @@ def _compose_langgraph_reply(runtime: RuntimeContext, request: LangGraphTurnRequ
             return _build_runtime_response(decision, slots=slots, runtime=runtime)
 
     if runtime.proposal_commitment_state == "simulacao_em_andamento":
-        adjustment_type = detect_simulation_adjustment(request.message_text)
         missing_profile = missing_profile_slots(
             missing_profile_fields=runtime.missing_profile_fields,
             slots=runtime.slots,
@@ -427,7 +480,7 @@ def _compose_langgraph_reply(runtime: RuntimeContext, request: LangGraphTurnRequ
         next_slot = missing_profile[0] if missing_profile else None
         decision = proposal_in_progress_decision(
             slots=runtime.slots,
-            adjustment_type=adjustment_type,
+            adjustment_type=runtime.adjustment_type,
             budget_follow_up_text=follow_up_for_slot("budget_monthly", policy_context),
             missing_profile_prompt=slot_prompt(next_slot, greeted=True, policy_context=policy_context)[0] if next_slot else None,
             missing_profile_follow_up=follow_up_for_slot(next_slot, policy_context) if next_slot else None,
@@ -436,7 +489,7 @@ def _compose_langgraph_reply(runtime: RuntimeContext, request: LangGraphTurnRequ
         if decision:
             return _build_runtime_response(decision, slots=slots, runtime=runtime)
 
-    objection_type = detect_objection_type(request.message_text)
+    objection_type = runtime.objection_type
     if objection_type:
         missing_business = missing_business_slots(slots)
         base = objection_reply(objection_type, runtime.slots, policy_context)
@@ -574,7 +627,29 @@ _compiled_graph = _compile_graph()
 
 
 async def run_message_through_langgraph(request: LangGraphTurnRequest) -> LangGraphTurnResponse:
+    seed_runtime = _build_runtime_context(request)
+    semantic_interpretation = await interpret_turn_semantics(
+        message_text=request.message_text,
+        history=request.conversation_history,
+        known_slots=seed_runtime.slots,
+        current_topic=seed_runtime.current_topic,
+        last_agent_commitment=seed_runtime.last_agent_commitment,
+        expected_slot=seed_runtime.expected_slot or infer_runtime_expected_slot(request.conversation_history),
+    )
+    enriched_request = LangGraphTurnRequest(
+        tenant_id=request.tenant_id,
+        conversation_id=request.conversation_id,
+        message_text=request.message_text,
+        conversation_history=list(request.conversation_history),
+        lead_name=request.lead_name,
+        lead_phone=request.lead_phone,
+        lead_cpf=request.lead_cpf,
+        lead_metadata=dict(request.lead_metadata),
+        conversation_context=dict(request.conversation_context),
+        channel=request.channel,
+        metadata={**request.metadata, "semantic_interpretation": semantic_interpretation},
+    )
     if _compiled_graph is None:
-        return _run_deterministic_flow(request)
-    result = _compiled_graph.invoke({"request": request})
+        return _run_deterministic_flow(enriched_request)
+    result = _compiled_graph.invoke({"request": enriched_request})
     return result["response"]

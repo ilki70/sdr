@@ -1849,3 +1849,48 @@
 
 ## Next Recommended Step
 - Publicar o backend/worker com essa correcao e testar um novo upload de documento no ambiente publicado.
+
+## 2026-03-25
+- `sdr`: corrigi uma regressao de memoria/conducao no `langgraph_runtime` que fazia a conversa voltar para `goal` ou contaminar `asset_value` com respostas de prazo/lance.
+- Causa:
+  - respostas curtas como `uso` nao estavam sendo entendidas como objetivo
+  - `ate um ano` nao era reconhecido como prazo por aceitar apenas numeros
+  - valores como `tenho 100mil` podiam cair em `asset_value` quando o runtime ja deveria tratar aquilo como `lance`
+- O que mudou:
+  - [`backend/app/services/conversation_context.py`](/home/ilki/sdr/backend/app/services/conversation_context.py) agora reconhece `uso` como `moradia`, aceita prazo em linguagem curta como `um ano` e amplia a leitura contextual de `lance`
+  - [`backend/app/services/langgraph_runtime.py`](/home/ilki/sdr/backend/app/services/langgraph_runtime.py) passou a bloquear sobrescrita indevida de `asset_value` quando a resposta atual corresponde a `timeline` ou `lance`
+  - adicionada regressao do fluxo real em [`backend/tests/test_langgraph_runtime.py`](/home/ilki/sdr/backend/tests/test_langgraph_runtime.py)
+- Validacao:
+  - replay local do fluxo `oi -> imovel -> uso -> ate um ano -> 500mil -> cpf -> telefone -> 5mil -> tenho 100mil -> 12 meses -> 100mil` passou a preservar `goal`, `timeline`, `asset_value`, `budget_monthly` e `lance`
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q /home/ilki/sdr/backend/tests/test_langgraph_runtime.py /home/ilki/sdr/backend/tests/test_messages_langgraph_runtime.py /home/ilki/sdr/backend/tests/test_conversation_context.py /home/ilki/sdr/backend/tests/test_conversation_policy.py /home/ilki/sdr/backend/tests/test_conversation_semantics.py` ok (`58 passed`)
+
+## Current Status
+- O runtime local ficou mais robusto para respostas curtas e valores numericos reapresentados durante qualificacao/cadastro.
+- O caso real reportado de voltar em `objetivo` depois de `100mil` agora esta coberto por regressao local.
+
+## Next Recommended Step
+- Publicar essa rodada no ambiente `sdr` e repetir o fluxo real no `Agent Lab`/WhatsApp para validar o comportamento fora do helper de testes.
+
+## 2026-03-25
+- `sdr`: iniciei a substituicao gradual de heuristica por interpretacao semantica de turno no runtime.
+- O que mudou:
+  - criado [`backend/app/services/conversation_turn_interpreter.py`](/home/ilki/sdr/backend/app/services/conversation_turn_interpreter.py)
+  - `run_message_through_langgraph` em [`backend/app/services/langgraph_runtime.py`](/home/ilki/sdr/backend/app/services/langgraph_runtime.py) agora interpreta o turno antes da orquestracao e injeta `semantic_interpretation` no request
+  - quando houver OpenAI, a camada nova pode estruturar o turno em JSON canonico; sem API key ou em falha, cai em fallback deterministico
+  - o runtime passou a consumir `slot_updates`, `speech_act`, `pending_user_request`, `objection_type` e `adjustment_type` vindos dessa interpretacao antes das heuristicas locais
+  - adicionada regressao em [`backend/tests/test_langgraph_runtime.py`](/home/ilki/sdr/backend/tests/test_langgraph_runtime.py) provando que o runtime aceita interpretacao semantica externa para resposta compacta como `pra mim`
+- Ajustes importantes no fallback:
+  - ficou conservador para nao inventar `lead_name` ou sobrescrever `asset_value` fora do contexto certo
+  - passou a respeitar melhor o `expected_slot` inferido do historico
+- Validacao:
+  - `python3 -m py_compile backend/app/services/conversation_turn_interpreter.py backend/app/services/langgraph_runtime.py backend/tests/test_langgraph_runtime.py` ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q /home/ilki/sdr/backend/tests/test_langgraph_runtime.py /home/ilki/sdr/backend/tests/test_messages_langgraph_runtime.py /home/ilki/sdr/backend/tests/test_conversation_context.py /home/ilki/sdr/backend/tests/test_conversation_policy.py /home/ilki/sdr/backend/tests/test_conversation_semantics.py` ok (`59 passed`)
+
+## Current Status
+- O runtime agora ja suporta um caminho hibrido:
+  - LLM para interpretar o turno em estado canonico
+  - fallback deterministico para manter resiliencia sem depender 100% da API
+- A compreensao ainda nao foi migrada por completo; parte das heuristicas continua ativa como rede de seguranca.
+
+## Next Recommended Step
+- Expandir a interpretacao semantica para cobrir mais atos conversacionais reais e reduzir gradualmente os extratores locais mais frageis, antes de publicar uma nova rodada no ambiente `sdr`.

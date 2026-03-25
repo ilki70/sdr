@@ -164,6 +164,8 @@ def _extract_timeline(text: str) -> str | None:
 
     normalized = unicodedata.normalize("NFKD", text.lower())
     normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    normalized = re.sub(r"\buma\b", "1", normalized)
+    normalized = re.sub(r"\bum\b", "1", normalized)
     match = re.search(r"(?:ate|em)\s+(\d+\s*(?:meses?|anos?|semanas?|dias?))", normalized)
     if match:
         return match.group(1).replace("  ", " ").strip()
@@ -237,9 +239,9 @@ def _extract_lance(text: str) -> str | None:
 
     normalized = unicodedata.normalize("NFKD", text.lower())
     folded = "".join(char for char in normalized if not unicodedata.combining(char))
-    if "lance" not in folded and "dar" not in folded:
+    if not any(term in folded for term in ("lance", "dar", "tenho", "entrada")):
         return None
-    return _extract_amount_for_keywords(text, ("lance",))
+    return _extract_amount_for_keywords(text, ("lance", "dar", "tenho", "entrada"))
 
 
 def _extract_asset_value(text: str) -> str | None:
@@ -273,8 +275,11 @@ def _extract_lead_name(text: str) -> str | None:
 
 def _extract_target_use_case(text: str) -> str | None:
     folded = _fold_text(text)
+    compact = _clean_text(folded)
     if any(term in folded for term in ["investir", "investimento", "retorno", "aplicar"]):
         return "investimento"
+    if compact in {"uso", "proprio", "propria", "próprio", "própria"}:
+        return "moradia"
     if any(
         term in folded
         for term in [

@@ -607,3 +607,64 @@ def test_langgraph_runtime_closes_after_negative_reply_post_delivery_commitment(
     response = responses[-1]
     assert response.flow_stage == "closing"
     assert "retomar" in response.reply_fragments[0].lower()
+
+
+def test_langgraph_runtime_preserves_goal_and_timeline_through_profile_and_lance_collection() -> None:
+    responses = _simulate_runtime_turns(
+        [
+            "oi",
+            "imovel",
+            "uso",
+            "até um ano",
+            "500mil",
+            "00275230716",
+            "12988162249",
+            "5mil",
+            "tenho 100mil",
+            "12 meses",
+            "100mil",
+        ]
+    )
+
+    assert responses[2].slot_projection["goal"] == "moradia"
+    assert responses[3].slot_projection["timeline"] == "1 ano"
+    assert responses[7].slot_projection["budget_monthly"] == "R$ 5mil"
+    assert responses[8].slot_projection["lance"] == "R$ 100mil"
+    assert responses[8].slot_projection["asset_value"] == "R$ 500mil"
+    assert responses[9].slot_projection["timeline"] == "12 meses"
+    assert responses[9].slot_projection["asset_value"] == "R$ 500mil"
+    assert responses[10].slot_projection["goal"] == "moradia"
+    assert responses[10].slot_projection["lance"] == "R$ 100mil"
+    assert responses[10].slot_projection["asset_value"] == "R$ 500mil"
+    assert "objetivo" not in " ".join(responses[10].reply_fragments).lower()
+
+
+def test_langgraph_runtime_accepts_semantic_interpretation_for_compact_goal_reply(monkeypatch) -> None:
+    async def _fake_interpretation(**kwargs):
+        return {
+            "slot_updates": {"goal": "moradia"},
+            "speech_act": "inform",
+        }
+
+    monkeypatch.setattr("app.services.langgraph_runtime.interpret_turn_semantics", _fake_interpretation)
+
+    response = __import__("asyncio").run(
+        run_message_through_langgraph(
+            LangGraphTurnRequest(
+                tenant_id="tenant-1",
+                conversation_id="conv-1",
+                message_text="pra mim",
+                conversation_history=[
+                    {"role": "assistant", "content": "Seu objetivo principal é morar, investir ou outro?"},
+                ],
+                lead_metadata={
+                    "langgraph_slot_projection": {
+                        "asset_type": "imovel",
+                    }
+                },
+            )
+        )
+    )
+
+    assert response.slot_projection["goal"] == "moradia"
+    assert response.reply_fragments == ["Qual é a faixa de valor do bem que você busca?"]
