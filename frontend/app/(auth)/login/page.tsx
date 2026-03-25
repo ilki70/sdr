@@ -1,13 +1,13 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, Suspense, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { BRAND_NAME } from "@/lib/brand";
 
 type LoginError = string | null;
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const formRef = useRef<HTMLFormElement>(null);
@@ -129,5 +129,15 @@ export default function LoginPage() {
         </p>
       </form>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={<main className="flex min-h-screen items-center justify-center px-6 text-sm text-white/70">Carregando...</main>}
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
