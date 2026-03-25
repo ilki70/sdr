@@ -8,13 +8,14 @@ from app.core.security import RequestContext, get_request_context, resolve_reque
 from app.schemas.auth import (
     AdminResetUserPasswordRequest,
     AdminResetUserPasswordResponse,
+    GoogleLoginRequest,
     LoginRequest,
     LoginResponse,
     MessageResponse,
     RegisterRequest,
     SessionResponse,
 )
-from app.services.auth import authenticate_user, register_user, reset_user_password
+from app.services.auth import authenticate_google_user, authenticate_user, register_user, reset_user_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -56,6 +57,22 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
         email=registered.email,
         full_name=registered.full_name,
         message="Registered",
+    )
+
+
+@router.post("/google/login", response_model=LoginResponse)
+async def google_login(payload: GoogleLoginRequest, db: AsyncSession = Depends(get_db_session)) -> LoginResponse:
+    try:
+        authenticated = await authenticate_google_user(db, payload)
+    except SQLAlchemyError:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database unavailable")
+    return LoginResponse(
+        user_id=authenticated.user_id,
+        tenant_id=authenticated.tenant_id,
+        role=authenticated.role,
+        email=authenticated.email,
+        full_name=authenticated.full_name,
+        message="Authenticated with Google",
     )
 
 

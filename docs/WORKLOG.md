@@ -1768,3 +1768,25 @@
 ## Next Recommended Step
 - Validar com conversas reais no ambiente publicado se o tom e as respostas de objeção refletiram bem a configuracao editada nas telas.
 - Se a resposta ainda estiver mecânica, o proximo ajuste deve ir para a configuracao estruturada de playbook, nao para mais ramificacoes no runtime central.
+
+## 2026-03-25
+- `sdr`: implementado login com Google mantendo a sessao interna atual baseada em `iron-session`.
+- O que mudou:
+  - backend ganhou provisionamento/autenticacao Google em [`backend/app/services/auth.py`](/home/ilki/sdr/backend/app/services/auth.py) e rota [`backend/app/api/v1/auth/routes.py`](/home/ilki/sdr/backend/app/api/v1/auth/routes.py)
+  - schema novo em [`backend/app/schemas/auth.py`](/home/ilki/sdr/backend/app/schemas/auth.py)
+  - frontend ganhou inicio e callback OAuth em [`frontend/app/api/auth/google/start/route.ts`](/home/ilki/sdr/frontend/app/api/auth/google/start/route.ts) e [`frontend/app/api/auth/google/callback/route.ts`](/home/ilki/sdr/frontend/app/api/auth/google/callback/route.ts)
+  - tela [`frontend/app/(auth)/login/page.tsx`](/home/ilki/sdr/frontend/app/(auth)/login/page.tsx) agora oferece `Entrar com Google`
+  - sessao temporaria do OAuth foi adicionada em [`frontend/lib/session.ts`](/home/ilki/sdr/frontend/lib/session.ts)
+  - envs documentadas em [`frontend/.env.example`](/home/ilki/sdr/frontend/.env.example)
+- Validacao:
+  - `python3 -m py_compile backend/app/schemas/auth.py backend/app/services/auth.py backend/app/api/v1/auth/routes.py backend/tests/test_auth_google.py` ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_auth_google.py` ok (`2 passed`)
+  - `npm run typecheck` ok com Node 20 local (`nvm use 20`)
+
+## Current Status
+- O projeto agora suporta login por email/senha e por Google, ambos convergindo para a mesma sessao interna do frontend.
+- Ainda falta configurar `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` no ambiente antes de publicar.
+
+## Next Recommended Step
+- Configurar as credenciais OAuth do Google no frontend, incluindo redirect URI para `/api/auth/google/callback`.
+- Depois disso, fazer commit, push e deploy da rodada e validar o fluxo no ambiente publicado.

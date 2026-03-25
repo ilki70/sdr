@@ -77,6 +77,8 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://pulse.orfi.com.br}
       BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://sdr_backend:8000}
       SESSION_SECRET: ${SESSION_SECRET:-replace-with-32-plus-chars}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     networks:
       - internal
       - orfinet

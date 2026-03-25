@@ -7,6 +7,9 @@ export interface AppSession {
   email?: string;
   role?: string;
   fullName?: string;
+  oauthState?: string;
+  oauthTenantId?: string;
+  oauthNext?: string;
 }
 
 const secret = process.env.SESSION_SECRET || "dev-only-super-secret-key-32-chars-min";

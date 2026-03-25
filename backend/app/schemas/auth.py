@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -49,3 +51,10 @@ class AdminResetUserPasswordResponse(BaseModel):
     user_id: str
     role: str
     status: str
+
+
+class GoogleLoginRequest(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=2, max_length=120)
+    tenant_id: str = Field(min_length=3, max_length=120)
+    role: str | None = Field(default=None, max_length=16)

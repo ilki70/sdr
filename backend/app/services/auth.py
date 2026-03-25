@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -7,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.entities import Tenant, TenantUser, User
-from app.schemas.auth import AdminResetUserPasswordRequest, RegisterRequest
+from app.schemas.auth import AdminResetUserPasswordRequest, GoogleLoginRequest, RegisterRequest
 from app.services.agents import ensure_default_agent_for_tenant
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
@@ -108,6 +110,69 @@ async def register_user(db: AsyncSession, payload: RegisterRequest) -> Authentic
             role=payload.role,
         )
         db.add(membership)
+
+    await db.flush()
+    await ensure_default_agent_for_tenant(db, tenant.id, user.id)
+    await db.commit()
+    return AuthenticatedUser(
+        user_id=user.id,
+        tenant_id=tenant.id,
+        role=membership.role,
+        email=user.email,
+        full_name=user.full_name,
+    )
+
+
+async def authenticate_google_user(
+    db: AsyncSession,
+    payload: GoogleLoginRequest,
+) -> AuthenticatedUser:
+    tenant_result = await db.execute(
+        select(Tenant).where((Tenant.id == payload.tenant_id) | (Tenant.slug == payload.tenant_id))
+    )
+    tenant = tenant_result.scalar_one_or_none()
+    if not tenant:
+        tenant = Tenant(
+            id=str(uuid4()),
+            name=f"Tenant {payload.tenant_id}",
+            slug=payload.tenant_id.lower().replace(" ", "-"),
+            status="active",
+        )
+        db.add(tenant)
+        await db.flush()
+
+    normalized_email = payload.email.lower()
+    user_result = await db.execute(select(User).where(User.email == normalized_email))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        user = User(
+            id=str(uuid4()),
+            email=normalized_email,
+            password_hash=hash_password(uuid4().hex),
+            full_name=payload.full_name,
+            is_active=True,
+        )
+        db.add(user)
+        await db.flush()
+    else:
+        user.is_active = True
+        if payload.full_name and user.full_name != payload.full_name:
+            user.full_name = payload.full_name
+
+    link_result = await db.execute(
+        select(TenantUser).where(TenantUser.user_id == user.id, TenantUser.tenant_id == tenant.id)
+    )
+    membership = link_result.scalar_one_or_none()
+    if not membership:
+        membership = TenantUser(
+            id=str(uuid4()),
+            tenant_id=tenant.id,
+            user_id=user.id,
+            role=payload.role or "operator",
+        )
+        db.add(membership)
+    elif payload.role:
+        membership.role = payload.role
 
     await db.flush()
     await ensure_default_agent_for_tenant(db, tenant.id, user.id)
