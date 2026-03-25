@@ -1650,3 +1650,28 @@
 ## Next Recommended Step
 - Consolidar commit, push e deploy desta rodada estrutural.
 - Depois disso, sair da fase de refatoracao interna e voltar para o que interessa comercialmente: bater conversas reais e ajustar `conversation_policy`/prompts com evidencias do comportamento publicado.
+
+## 2026-03-24
+- `sdr`: consolidada a rodada estrutural do runtime com publicacao e deploy.
+- Commits publicados:
+  - `6dce6dd` `refactor: split sdr conversation runtime layers`
+  - `e46604e` `docs: record sdr runtime refactor`
+- Publicacao:
+  - `main` enviado ao GitHub com sucesso
+  - remote local restaurado para `https://github.com/ilki70/sdr.git`
+- Deploy:
+  - build remoto do backend no Portainer com a tag `sdr-backend:prod-20260324-6dce6dd`
+  - stack `sdr` reaplicada na stack `35` com `BACKEND_IMAGE=sdr-backend:prod-20260324-6dce6dd`
+  - `LANGGRAPH_RUNTIME_ENABLED=true` preservado no ambiente da stack
+- Validacao operacional:
+  - `sdr_backend` convergiu para `sdr-backend:prod-20260324-6dce6dd`
+  - `UpdateStatus` do backend concluido com `State=completed`
+  - smoke `https://pulse.orfi.com.br/health` respondeu `ok`
+  - worktree local limpo apos os commits
+
+## Current Status
+- A rodada de refatoracao estrutural esta publicada e ativa em producao.
+- O runtime novo esta no ar com a separacao de estado, contexto, semantica, policy e formatter.
+
+## Next Recommended Step
+- Rodar uma bateria de conversas reais no ambiente publicado e ajustar a `conversation_policy` com base em desvios observados, em vez de voltar a crescer o `langgraph_runtime`.
