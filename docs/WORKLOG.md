@@ -1745,3 +1745,26 @@
 ## Next Recommended Step
 - Expor e usar no frontend a configuracao estruturada completa do playbook do agente, para reduzir dependencia de heuristica textual em `prompt_system`.
 - Rodar uma bateria de conversas reais no ambiente publicado para ajustar a policy agora em cima de configuracao viva, nao mais de fallbacks locais.
+
+## 2026-03-25
+- `sdr`: consolidado commit, push e deploy da rodada de alinhamento entre studio, policy e conversations.
+- Publicacao:
+  - commit local e remoto: `717a864` `feat: align runtime policy with studio`
+  - `git push` concluido em `origin/main`
+- Deploy:
+  - stack `sdr` reaplicada no Portainer (`stack id 35`, `endpointId 1`)
+  - `BACKEND_IMAGE` atualizado para `ghcr.io/ilki70/sdr/backend:717a864665d83eb291176119a106f0b98656005a`
+  - `sdr_backend` convergiu para a imagem `ghcr.io/ilki70/sdr/backend:717a864665d83eb291176119a106f0b98656005a@sha256:0f6282d2d52d4e4a823c1b5cb3a8cc944b1250ff5fa5916ff6f8f00ffc146062`
+  - `UpdateStatus` do service: `completed`
+  - `LANGGRAPH_RUNTIME_ENABLED=true` preservado na stack
+- Smoke:
+  - `https://pulse.orfi.com.br/health` respondeu `ok`
+  - worktree local limpo apos o commit
+
+## Current Status
+- A rodada de alinhamento entre `Agents`, `Personas`, `conversation_policy` e `Conversations` esta publicada em producao.
+- O backend agora roda a imagem do commit `717a864`.
+
+## Next Recommended Step
+- Validar com conversas reais no ambiente publicado se o tom e as respostas de objeção refletiram bem a configuracao editada nas telas.
+- Se a resposta ainda estiver mecânica, o proximo ajuste deve ir para a configuracao estruturada de playbook, nao para mais ramificacoes no runtime central.
