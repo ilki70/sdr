@@ -61,6 +61,7 @@ class ConversationSummaryResponse(BaseModel):
     summary: str | None = None
     pipeline_status: str | None = None
     next_step: str | None = None
+    runtime_state: dict[str, str] = Field(default_factory=dict)
     message_count: int = 0
 
 

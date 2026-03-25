@@ -113,6 +113,11 @@ class RuntimeContext:
     speech_act: str = "inform"
 
 
+def _policy_context(request: LangGraphTurnRequest) -> dict[str, Any] | None:
+    value = request.metadata.get("policy_context")
+    return value if isinstance(value, dict) else None
+
+
 def is_langgraph_runtime_enabled() -> bool:
     return bool(settings.langgraph_runtime_enabled)
 
@@ -391,16 +396,17 @@ def _build_runtime_response(
 
 def _compose_langgraph_reply(runtime: RuntimeContext, request: LangGraphTurnRequest) -> LangGraphTurnResponse:
     slots = runtime.slots
+    policy_context = _policy_context(request)
     confirmation = slot_confirmation(runtime.new_slots)
     runtime = _refresh_runtime_semantics(runtime, request)
     runtime_metadata = _runtime_state_payload(runtime)
     if detect_closing_signal(request.message_text, request.conversation_history):
-        return _build_runtime_response(closing_decision(), slots=slots, runtime=runtime)
+        return _build_runtime_response(closing_decision(policy_context), slots=slots, runtime=runtime)
     if detect_human_request(request.message_text):
-        return _build_runtime_response(human_handoff_decision(), slots=slots, runtime=runtime)
+        return _build_runtime_response(human_handoff_decision(policy_context), slots=slots, runtime=runtime)
 
     if runtime.pipeline_status == "handoff":
-        return _build_runtime_response(active_handoff_decision(), slots=slots, runtime=runtime)
+        return _build_runtime_response(active_handoff_decision(policy_context), slots=slots, runtime=runtime)
 
     if runtime.current_topic == "simulation_delivery":
         decision = simulation_delivery_decision(
@@ -422,9 +428,9 @@ def _compose_langgraph_reply(runtime: RuntimeContext, request: LangGraphTurnRequ
         decision = proposal_in_progress_decision(
             slots=runtime.slots,
             adjustment_type=adjustment_type,
-            budget_follow_up_text=follow_up_for_slot("budget_monthly"),
-            missing_profile_prompt=slot_prompt(next_slot, greeted=True)[0] if next_slot else None,
-            missing_profile_follow_up=follow_up_for_slot(next_slot) if next_slot else None,
+            budget_follow_up_text=follow_up_for_slot("budget_monthly", policy_context),
+            missing_profile_prompt=slot_prompt(next_slot, greeted=True, policy_context=policy_context)[0] if next_slot else None,
+            missing_profile_follow_up=follow_up_for_slot(next_slot, policy_context) if next_slot else None,
             restart_question_detected=looks_like_restart_question(request.message_text),
         )
         if decision:
@@ -433,7 +439,7 @@ def _compose_langgraph_reply(runtime: RuntimeContext, request: LangGraphTurnRequ
     objection_type = detect_objection_type(request.message_text)
     if objection_type:
         missing_business = missing_business_slots(slots)
-        base = objection_reply(objection_type, runtime.slots)
+        base = objection_reply(objection_type, runtime.slots, policy_context)
         if missing_business:
             next_slot = runtime.expected_slot or missing_business[0]
             if next_slot not in missing_business:
@@ -442,8 +448,8 @@ def _compose_langgraph_reply(runtime: RuntimeContext, request: LangGraphTurnRequ
                 objection_decision(
                     base_reply=base,
                     confirmation=confirmation,
-                    next_prompt=slot_prompt(next_slot, greeted=True)[0],
-                    next_follow_up=follow_up_for_slot(next_slot),
+                    next_prompt=slot_prompt(next_slot, greeted=True, policy_context=policy_context)[0],
+                    next_follow_up=follow_up_for_slot(next_slot, policy_context),
                 ),
                 slots=slots,
                 runtime=runtime,
@@ -458,8 +464,8 @@ def _compose_langgraph_reply(runtime: RuntimeContext, request: LangGraphTurnRequ
                 objection_decision(
                     base_reply=base,
                     confirmation=confirmation,
-                    next_prompt=slot_prompt(next_slot, greeted=True)[0],
-                    next_follow_up=follow_up_for_slot(next_slot),
+                    next_prompt=slot_prompt(next_slot, greeted=True, policy_context=policy_context)[0],
+                    next_follow_up=follow_up_for_slot(next_slot, policy_context),
                 ),
                 slots=slots,
                 runtime=runtime,
@@ -483,8 +489,8 @@ def _compose_langgraph_reply(runtime: RuntimeContext, request: LangGraphTurnRequ
             next_slot = missing_business[0]
         return _build_runtime_response(
             qualification_decision(
-                prompt_fragments=slot_prompt(next_slot, greeted=greeted),
-                follow_up_suggestion=follow_up_for_slot(next_slot),
+                prompt_fragments=slot_prompt(next_slot, greeted=greeted, policy_context=policy_context),
+                follow_up_suggestion=follow_up_for_slot(next_slot, policy_context),
                 confirmation=confirmation,
             ),
             slots=slots,
@@ -501,8 +507,8 @@ def _compose_langgraph_reply(runtime: RuntimeContext, request: LangGraphTurnRequ
             next_slot = missing_profile[0]
         return _build_runtime_response(
             registration_decision(
-                prompt_fragments=slot_prompt(next_slot, greeted=True),
-                follow_up_suggestion=follow_up_for_slot(next_slot),
+                prompt_fragments=slot_prompt(next_slot, greeted=True, policy_context=policy_context),
+                follow_up_suggestion=follow_up_for_slot(next_slot, policy_context),
                 confirmation=confirmation,
                 next_slot=next_slot,
             ),

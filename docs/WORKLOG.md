@@ -1675,3 +1675,73 @@
 
 ## Next Recommended Step
 - Rodar uma bateria de conversas reais no ambiente publicado e ajustar a `conversation_policy` com base em desvios observados, em vez de voltar a crescer o `langgraph_runtime`.
+
+## 2026-03-24
+- `sdr`: concluida auditoria de alinhamento entre o frontend operacional e a nova estrutura do runtime.
+- Registro:
+  - [`docs/frontend-runtime-alignment-audit.md`](/home/ilki/sdr/docs/frontend-runtime-alignment-audit.md)
+- Diagnostico consolidado:
+  - alinhado:
+    - `Agent Lab`
+  - parcialmente alinhado:
+    - `Conversations`
+    - `Knowledge`
+  - desalinhado:
+    - `Agents`
+    - `Personas`
+    - `Training`
+- Evidencia principal:
+  - `Agent Lab` usa `messages/stream` e cai em `run_configured_sales_runtime`
+  - `Training` ainda usa `run_sales_agent` em [`backend/app/services/training.py`](/home/ilki/sdr/backend/app/services/training.py)
+  - `Conversations` ainda depende de `inferMockStatus` e `buildMockSummary` no frontend
+  - `Agents`/`Personas` seguem administrando prompt/playbook/versionamento, mas o runtime novo nao consome esses campos no caminho principal
+
+## Current Status
+- A base nova do runtime esta publicada, mas nem todas as areas do frontend foram realinhadas para ela.
+- O maior desalinhamento funcional hoje esta em `Training`.
+
+## Next Recommended Step
+- Migrar `Training` para usar o runtime novo antes de mexer nas demais telas.
+- Em seguida, redefinir como `Agents` e `Personas` alimentam a `conversation_policy` e/ou a configuracao estruturada do runtime.
+
+## 2026-03-25
+- `sdr`: migrado o fluxo de `Training` para o runtime novo publicado.
+- O que mudou:
+  - [`backend/app/services/training.py`](/home/ilki/sdr/backend/app/services/training.py) deixou de chamar `run_sales_agent` diretamente
+  - `Training` agora passa por `run_configured_sales_runtime`, aplicando `lead_capture` e `slot_projection` no mesmo caminho do `Agent Lab` e do WhatsApp
+  - adicionada regressao dedicada em [`backend/tests/test_training_runtime.py`](/home/ilki/sdr/backend/tests/test_training_runtime.py)
+  - corrigida compatibilidade Python 3.9 em [`backend/app/schemas/knowledge.py`](/home/ilki/sdr/backend/app/schemas/knowledge.py) com `from __future__ import annotations`
+- Validacao:
+  - `python3 -m py_compile backend/app/schemas/knowledge.py backend/app/services/training.py backend/tests/test_training_runtime.py` ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_training_runtime.py backend/tests/test_messages_langgraph_runtime.py backend/tests/test_langgraph_runtime.py` ok (`26 passed`)
+
+## Current Status
+- `Training` deixou de treinar o motor legado e agora usa o mesmo runtime configurado do produto publicado.
+- O desalinhamento mais critico entre frontend e backend caiu; os proximos pontos prioritarios continuam sendo `Agents`, `Personas` e a remocao dos fallbacks de estado em `Conversations`.
+
+## Next Recommended Step
+- Realinhar `Agents` e `Personas` para que a configuracao editada nessas telas alimente a `conversation_policy` e o `conversation_runtime_state` de forma explicita.
+- Depois disso, remover `inferMockStatus` e `buildMockSummary` de `Conversations` e expor o estado real do runtime na API.
+
+## 2026-03-25
+- `sdr`: alinhado o caminho entre `Agents`/`Personas`, `conversation_policy` e a tela de `Conversations`.
+- O que mudou:
+  - criado [`backend/app/services/conversation_policy_config.py`](/home/ilki/sdr/backend/app/services/conversation_policy_config.py) para resolver contexto publicado de `AgentVersion` + `PersonaVersion`
+  - [`backend/app/services/runtime_router.py`](/home/ilki/sdr/backend/app/services/runtime_router.py) agora injeta esse `policy_context` no `langgraph_runtime`
+  - [`backend/app/services/conversation_semantics.py`](/home/ilki/sdr/backend/app/services/conversation_semantics.py) passou a usar tom/regras da persona e playbook de objeções para modular prompts e respostas
+  - [`backend/app/services/conversation_policy.py`](/home/ilki/sdr/backend/app/services/conversation_policy.py) passou a usar regras configuradas de handoff/follow-up
+  - [`backend/app/services/messages.py`](/home/ilki/sdr/backend/app/services/messages.py) e [`backend/app/schemas/messages.py`](/home/ilki/sdr/backend/app/schemas/messages.py) agora expõem `runtime_state` real nas conversas
+  - [`frontend/app/(app)/conversations/page.tsx`](/home/ilki/sdr/frontend/app/(app)/conversations/page.tsx) deixou de usar `inferMockStatus` e `buildMockSummary`, passando a confiar em `pipeline_status`, `summary`, `next_step` e `runtime_state` vindos da API
+  - corrigido bug real em `messages.py`: `update_conversation_pipeline_status` ainda chamava `_get_lead_for_conversation`, helper inexistente
+- Validacao:
+  - `python3 -m py_compile` nos arquivos alterados ok
+  - `PYTHONPATH=/home/ilki/sdr/backend pytest -q backend/tests/test_messages_langgraph_runtime.py backend/tests/test_messages_pipeline.py backend/tests/test_langgraph_runtime.py backend/tests/test_conversation_policy.py` ok (`43 passed`)
+
+## Current Status
+- `Training` ja usa o runtime novo.
+- `Agents` e `Personas` passaram a influenciar o comportamento real da policy no runtime publicado.
+- `Conversations` deixou de inferir status/resumo localmente e agora mostra o estado real consolidado pela API.
+
+## Next Recommended Step
+- Expor e usar no frontend a configuracao estruturada completa do playbook do agente, para reduzir dependencia de heuristica textual em `prompt_system`.
+- Rodar uma bateria de conversas reais no ambiente publicado para ajustar a policy agora em cima de configuracao viva, nao mais de fallbacks locais.

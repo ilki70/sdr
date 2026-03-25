@@ -240,6 +240,49 @@ def test_langgraph_runtime_handles_objection_without_losing_flow() -> None:
     assert response.reply_fragments[-1] == "Seu objetivo principal é morar, investir ou outro?"
 
 
+def test_langgraph_runtime_uses_persona_tone_for_shorter_prompting() -> None:
+    response = __import__("asyncio").run(
+        run_message_through_langgraph(
+            LangGraphTurnRequest(
+                tenant_id="tenant-1",
+                conversation_id="conv-1",
+                message_text="Oi",
+                metadata={
+                    "policy_context": {
+                        "persona_tone": "consultivo e objetivo",
+                        "approach_rules": ["Faça perguntas curtas."],
+                    }
+                },
+            )
+        )
+    )
+
+    assert response.reply_fragments == ["Você busca imóvel ou veículo?"]
+
+
+def test_langgraph_runtime_uses_persona_objection_playbook_when_available() -> None:
+    response = __import__("asyncio").run(
+        run_message_through_langgraph(
+            LangGraphTurnRequest(
+                tenant_id="tenant-1",
+                conversation_id="conv-1",
+                message_text="Tenho receio da taxa",
+                metadata={
+                    "policy_context": {
+                        "objection_playbook": {
+                            "taxa": "Explique o custo total com clareza e leve o lead para a proposta oficial.",
+                        }
+                    }
+                },
+                lead_metadata={"langgraph_slot_projection": {"asset_type": "imovel"}},
+            )
+        )
+    )
+
+    assert response.flow_stage == "objection_handling"
+    assert "custo total" in response.reply_text
+
+
 def test_langgraph_runtime_keeps_simulation_in_progress_without_restarting_flow() -> None:
     response = __import__("asyncio").run(
         run_message_through_langgraph(

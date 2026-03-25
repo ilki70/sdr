@@ -69,7 +69,7 @@ def test_update_conversation_pipeline_status_persists_explicit_fields(monkeypatc
         return SimpleNamespace(conversation=SimpleNamespace(id="conv-1", pipeline_status="handoff"))
 
     monkeypatch.setattr(messages, "get_conversation_or_none", fake_get_conversation)
-    monkeypatch.setattr(messages, "_get_lead_for_conversation", fake_get_lead)
+    monkeypatch.setattr(messages, "get_lead_for_conversation", fake_get_lead)
     monkeypatch.setattr(messages, "persist_conversation_pipeline_fields", fake_persist_pipeline_fields)
     monkeypatch.setattr(messages, "get_conversation_detail", fake_get_detail)
 
@@ -90,3 +90,19 @@ def test_update_conversation_pipeline_status_persists_explicit_fields(monkeypatc
     assert captured["summary"] == "Resumo atual"
     assert "Assumir atendimento humano" in str(captured["next_step"])
     assert db.committed is True
+
+
+def test_derive_runtime_state_reads_central_runtime_state() -> None:
+    lead = SimpleNamespace(
+        metadata_json={
+            "conversation_runtime_state": {"current_topic": "qualification"},
+            "langgraph_runtime_state": {"current_topic": "simulation_delivery", "conversation_mode": "delivering"},
+        }
+    )
+
+    runtime_state = messages._derive_runtime_state(lead)
+
+    assert runtime_state == {
+        "current_topic": "simulation_delivery",
+        "conversation_mode": "delivering",
+    }

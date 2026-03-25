@@ -25,12 +25,15 @@ type Conversation = {
   last_message_preview: string | null;
   summary?: string;
   pipeline_status?: LeadPipelineStatus;
+  next_step?: string | null;
+  runtime_state?: Record<string, string>;
 };
 
 type DecoratedConversation = Conversation & {
   summary: string;
   pipeline_status: LeadPipelineStatus;
   next_step: string;
+  runtime_state: Record<string, string>;
 };
 
 type SortField = "started_at" | "updated_at" | "title" | "pipeline_status";
@@ -91,23 +94,6 @@ function statusTone(status: LeadPipelineStatus): string {
   }
 }
 
-function inferMockStatus(conversation: Conversation): LeadPipelineStatus {
-  const folded = `${conversation.status} ${conversation.title} ${conversation.last_message_preview || ""}`.toLowerCase();
-  if (folded.includes("closed") || folded.includes("desqual")) {
-    return "disqualified";
-  }
-  if (folded.includes("waiting_human") || folded.includes("handoff") || folded.includes("humano")) {
-    return "handoff";
-  }
-  if (folded.includes("agend") || folded.includes("visita") || folded.includes("reuni")) {
-    return "scheduled";
-  }
-  if (conversation.message_count <= 1) {
-    return "new";
-  }
-  return "qualifying";
-}
-
 function leadFieldLabel(field: string): string {
   switch (field) {
     case "nome_completo":
@@ -121,39 +107,16 @@ function leadFieldLabel(field: string): string {
   }
 }
 
-function buildMockSummary(conversation: Conversation): string {
-  const preview = conversation.last_message_preview?.trim();
-  if (preview) {
-    return preview;
-  }
-  const foldedChannel = conversation.channel.toLowerCase();
-  if (foldedChannel === "whatsapp") {
-    return "Lead entrou pelo WhatsApp e ainda não há contexto suficiente registrado no resumo.";
-  }
-  if (foldedChannel === "lab") {
-    return "Sessão de laboratório aberta para testar roteiro, objeções e próximos passos do agente.";
-  }
-  return "Conversa iniciada na operação comercial, aguardando mais contexto para qualificação.";
-}
-
 function decorateConversation(conversation: Conversation): DecoratedConversation {
-  const pipelineStatus = conversation.pipeline_status || inferMockStatus(conversation);
+  const pipelineStatus = conversation.pipeline_status || "new";
   return {
     ...conversation,
     lead_profile_missing_fields: conversation.lead_profile_missing_fields || [],
     agent_paused: conversation.agent_paused || false,
-    summary: conversation.summary || buildMockSummary(conversation),
+    summary: conversation.summary || "Sem resumo operacional registrado.",
     pipeline_status: pipelineStatus,
-    next_step:
-      pipelineStatus === "handoff"
-        ? "Assumir atendimento humano e revisar contexto"
-        : pipelineStatus === "scheduled"
-          ? "Confirmar horario e preparar follow-up"
-          : pipelineStatus === "disqualified"
-            ? "Registrar motivo e encerrar no funil"
-            : pipelineStatus === "new"
-              ? "Fazer primeira qualificacao"
-              : "Aprofundar necessidade e conduzir proximo passo",
+    next_step: conversation.next_step || "Sem próximo passo registrado.",
+    runtime_state: conversation.runtime_state || {},
   };
 }
 
@@ -431,6 +394,11 @@ export default function ConversationsPage() {
                         <p className="mt-1 text-xs text-slate-400">{conversation.lead_phone || "Telefone nao capturado"}</p>
                         <p className="mt-1 text-xs text-slate-500">{conversation.lead_cpf || "CPF nao capturado"}</p>
                         <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">{conversation.channel}</p>
+                        {conversation.runtime_state.current_topic ? (
+                          <p className="mt-1 text-[11px] uppercase tracking-wide text-cyan-300">
+                            Topico: {conversation.runtime_state.current_topic}
+                          </p>
+                        ) : null}
                         {missingFields.length > 0 ? (
                           <p className="mt-2 text-[11px] uppercase tracking-wide text-amber-300">
                             Faltando: {missingFields.map(leadFieldLabel).join(", ")}
@@ -618,6 +586,18 @@ export default function ConversationsPage() {
                   <div className="rounded-[24px] border border-slate-800 bg-slate-950 px-4 py-4">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Resumo do lead</p>
                     <p className="mt-2 text-sm leading-6 text-slate-300">{decorateConversation(detail.conversation).summary}</p>
+                    {decorateConversation(detail.conversation).runtime_state.current_topic ? (
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-wide text-slate-400">
+                        <span className="rounded-full border border-slate-700 px-3 py-1">
+                          Topico {decorateConversation(detail.conversation).runtime_state.current_topic}
+                        </span>
+                        {decorateConversation(detail.conversation).runtime_state.conversation_mode ? (
+                          <span className="rounded-full border border-slate-700 px-3 py-1">
+                            Modo {decorateConversation(detail.conversation).runtime_state.conversation_mode}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="rounded-[24px] border border-slate-800 bg-slate-950 px-4 py-4">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Cadastro obrigatorio</p>

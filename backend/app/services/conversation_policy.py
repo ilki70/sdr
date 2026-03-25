@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -84,27 +85,42 @@ def ask_delivery_channel_reply() -> list[str]:
     return ["Perfeito. Você prefere receber a simulação por WhatsApp ou por e-mail?"]
 
 
-def closing_decision() -> PolicyDecision:
+def closing_decision(policy_context: dict[str, Any] | None = None) -> PolicyDecision:
+    follow_up_suggestion = "Encerrar a conversa por agora e aguardar retorno do lead."
+    if isinstance(policy_context, dict):
+        follow_up_rules = policy_context.get("follow_up_rules")
+        if isinstance(follow_up_rules, list) and follow_up_rules:
+            follow_up_suggestion = str(follow_up_rules[0])
     return PolicyDecision(
         fragments=["Perfeito. Fico à disposição e sigo por aqui caso você queira retomar depois."],
-        follow_up_suggestion="Encerrar a conversa por agora e aguardar retorno do lead.",
+        follow_up_suggestion=follow_up_suggestion,
         flow_stage="closing",
     )
 
 
-def human_handoff_decision() -> PolicyDecision:
+def human_handoff_decision(policy_context: dict[str, Any] | None = None) -> PolicyDecision:
+    follow_up_suggestion = "Assumir atendimento humano e revisar contexto capturado."
+    if isinstance(policy_context, dict):
+        handoff_rules = policy_context.get("handoff_rules")
+        if isinstance(handoff_rules, list) and handoff_rules:
+            follow_up_suggestion = str(handoff_rules[0])
     return PolicyDecision(
         fragments=["Vou direcionar seu atendimento para um consultor humano."],
-        follow_up_suggestion="Assumir atendimento humano e revisar contexto capturado.",
+        follow_up_suggestion=follow_up_suggestion,
         flow_stage="handoff",
         handoff_requested=True,
     )
 
 
-def active_handoff_decision() -> PolicyDecision:
+def active_handoff_decision(policy_context: dict[str, Any] | None = None) -> PolicyDecision:
+    follow_up_suggestion = "Aguardar atendimento humano e revisar novas mensagens do lead."
+    if isinstance(policy_context, dict):
+        handoff_rules = policy_context.get("handoff_rules")
+        if isinstance(handoff_rules, list) and handoff_rules:
+            follow_up_suggestion = str(handoff_rules[0])
     return PolicyDecision(
         fragments=["Seu atendimento já está com um consultor humano. Vou manter o contexto atualizado por aqui."],
-        follow_up_suggestion="Aguardar atendimento humano e revisar novas mensagens do lead.",
+        follow_up_suggestion=follow_up_suggestion,
         flow_stage="handoff",
         handoff_requested=True,
     )

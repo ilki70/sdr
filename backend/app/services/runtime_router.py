@@ -6,6 +6,7 @@ from typing import Any
 from app.agents.graph import run_sales_agent
 from app.agents.state import AgentState
 from app.services.channel_formatter import format_reply
+from app.services.conversation_policy_config import get_conversation_policy_context
 from app.services.conversation_runtime_state import get_runtime_state as load_runtime_state
 from app.services.conversation_runtime_state import store_runtime_state
 from app.services.langgraph_runtime import (
@@ -63,6 +64,7 @@ async def run_configured_sales_runtime(
     attachment_payload = attachments or []
 
     if is_langgraph_runtime_enabled():
+        policy_context = await get_conversation_policy_context(tenant_id, agent_id)
         langgraph_response = await run_message_through_langgraph(
             LangGraphTurnRequest(
                 tenant_id=tenant_id,
@@ -75,7 +77,7 @@ async def run_configured_sales_runtime(
                 lead_metadata=dict(getattr(lead, "metadata_json", {}) or {}),
                 conversation_context=dict(state.conversation_context or {}),
                 channel=channel,
-                metadata={"agent_id": agent_id, "attachments": attachment_payload},
+                metadata={"agent_id": agent_id, "attachments": attachment_payload, "policy_context": policy_context},
             )
         )
         apply_runtime_slot_projection(

@@ -1,7 +1,9 @@
 from app.services.conversation_policy import (
+    closing_decision,
     ask_delivery_channel_reply,
     detect_closing_signal,
     detect_human_request,
+    human_handoff_decision,
     proposal_ready_decision,
     proposal_progress_reply,
     qualification_decision,
@@ -85,3 +87,15 @@ def test_proposal_ready_decision_preserves_summary() -> None:
 
     assert decision.fragments == ["Perfeito. Com esses dados, eu sigo para a simulação."]
     assert "R$ 500mil" in decision.follow_up_suggestion
+
+
+def test_closing_decision_prefers_follow_up_rule_when_available() -> None:
+    decision = closing_decision({"follow_up_rules": ["Aguardar retorno consultivo em vez de insistir."]})
+
+    assert decision.follow_up_suggestion == "Aguardar retorno consultivo em vez de insistir."
+
+
+def test_human_handoff_decision_prefers_handoff_rule_when_available() -> None:
+    decision = human_handoff_decision({"handoff_rules": ["Encaminhar para humano com todo o contexto capturado."]})
+
+    assert decision.follow_up_suggestion == "Encaminhar para humano com todo o contexto capturado."

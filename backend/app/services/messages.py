@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.time import utcnow_naive
 from app.services.agents import resolve_agent_for_conversation
+from app.services.conversation_runtime_state import get_runtime_state as load_runtime_state
 from app.services.lead_capture import required_profile_fields
 from app.models.entities import ChannelIntegration, Conversation, Lead, Message
 from app.schemas.messages import ConversationDetailResponse, ConversationMessageResponse, ConversationSummaryResponse
@@ -299,6 +300,16 @@ def _derive_next_step(pipeline_status: str, latest_message: Message | None) -> s
     return "Aprofundar necessidade, objeções e conduzir para o proximo passo."
 
 
+def _derive_runtime_state(lead: Lead) -> dict[str, str]:
+    metadata = dict(getattr(lead, "metadata_json", {}) or {})
+    runtime_state = load_runtime_state(metadata, source="langgraph")
+    return {
+        str(key): str(value)
+        for key, value in runtime_state.items()
+        if isinstance(key, str) and isinstance(value, str) and value.strip()
+    }
+
+
 async def persist_conversation_pipeline_fields(
     db: AsyncSession,
     conversation_id: str,
@@ -374,6 +385,7 @@ async def list_conversations(db: AsyncSession, tenant_id: str) -> list[Conversat
             summary=_derive_summary(conversation, lead, latest_message),
             pipeline_status=conversation.pipeline_status or pipeline_status,
             next_step=conversation.next_step or _derive_next_step(conversation.pipeline_status or pipeline_status, latest_message),
+            runtime_state=_derive_runtime_state(lead),
             message_count=int(count_map.get(conversation.id, 0)),
         )
         for conversation, lead in rows
@@ -420,7 +432,7 @@ async def update_conversation_pipeline_status(
     conversation = await get_conversation_or_none(db, tenant_id, conversation_id)
     if not conversation:
         return None
-    lead = await _get_lead_for_conversation(db, conversation)
+    lead = await get_lead_for_conversation(db, conversation)
 
     conversation_status = "open"
     lead_lifecycle_status = "engaged"

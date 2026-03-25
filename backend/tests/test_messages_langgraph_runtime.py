@@ -131,7 +131,11 @@ def test_runtime_router_formats_long_whatsapp_reply(monkeypatch) -> None:
             runtime_metadata={},
         )
 
+    async def fake_get_conversation_policy_context(*_args, **_kwargs):
+        return {}
+
     monkeypatch.setattr(runtime_router, "is_langgraph_runtime_enabled", lambda: True)
+    monkeypatch.setattr(runtime_router, "get_conversation_policy_context", fake_get_conversation_policy_context)
     monkeypatch.setattr(runtime_router, "run_message_through_langgraph", fake_run_message_through_langgraph)
 
     runtime_state, model_name = asyncio.run(
@@ -147,3 +151,48 @@ def test_runtime_router_formats_long_whatsapp_reply(monkeypatch) -> None:
     assert model_name == "langgraph"
     assert len(runtime_state.reply_fragments) >= 2
     assert runtime_state.draft_reply == "\n\n".join(runtime_state.reply_fragments)
+
+
+def test_runtime_router_injects_policy_context_into_langgraph_request(monkeypatch) -> None:
+    lead = SimpleNamespace(name=None, phone=None, cpf=None, metadata_json={})
+    state = AgentState(
+        tenant_id="tenant-1",
+        conversation_id="conv-1",
+        message_text="oi",
+        conversation_history=[],
+        media_context=[],
+    )
+    observed: dict[str, object] = {}
+
+    async def fake_get_conversation_policy_context(tenant_id: str, agent_id: str | None):
+        observed["policy_lookup"] = (tenant_id, agent_id)
+        return {"persona_tone": "consultivo e objetivo", "objection_playbook": {"preco": "reposicione pelo valor"}}
+
+    async def fake_run_message_through_langgraph(request):
+        observed["request_metadata"] = dict(request.metadata)
+        return LangGraphTurnResponse(
+            reply_text="Olá! Aqui é da Orfi Consórcios.",
+            reply_fragments=["Olá! Aqui é da Orfi Consórcios."],
+            follow_up_suggestion="Capturar nome do lead.",
+            slot_projection={},
+            runtime_metadata={},
+        )
+
+    monkeypatch.setattr(runtime_router, "is_langgraph_runtime_enabled", lambda: True)
+    monkeypatch.setattr(runtime_router, "get_conversation_policy_context", fake_get_conversation_policy_context)
+    monkeypatch.setattr(runtime_router, "run_message_through_langgraph", fake_run_message_through_langgraph)
+
+    runtime_state, model_name = asyncio.run(
+        runtime_router.run_configured_sales_runtime(
+            state=state,
+            tenant_id="tenant-1",
+            agent_id="agent-1",
+            lead=lead,
+            channel="lab",
+        )
+    )
+
+    assert model_name == "langgraph"
+    assert observed["policy_lookup"] == ("tenant-1", "agent-1")
+    assert observed["request_metadata"]["policy_context"]["persona_tone"] == "consultivo e objetivo"
+    assert runtime_state.follow_up_suggestion == "Capturar nome do lead."

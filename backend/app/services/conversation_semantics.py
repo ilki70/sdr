@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from app.services.conversation_context import _extract_asset_value, _infer_expected_slot
 from app.services.conversation_policy import detect_closing_signal, detect_human_request
 
@@ -161,26 +163,96 @@ def missing_profile_slots(*, missing_profile_fields: list[str], slots: dict[str,
     return missing
 
 
-def slot_prompt(slot_name: str, *, greeted: bool) -> list[str]:
+def _style_context(policy_context: dict[str, Any] | None) -> tuple[bool, bool]:
+    if not isinstance(policy_context, dict):
+        return False, False
+    tone_parts = [
+        str(policy_context.get("persona_tone") or ""),
+        str(policy_context.get("persona_prompt_system") or ""),
+        str(policy_context.get("agent_prompt_system") or ""),
+        " ".join(str(item) for item in policy_context.get("approach_rules") or []),
+        " ".join(str(item) for item in policy_context.get("agent_rules") or []),
+    ]
+    joined = " ".join(part.lower() for part in tone_parts if part)
+    short_questions = "perguntas curtas" in joined or "pergunta curta" in joined or "objetiv" in joined or "clareza" in joined
+    consultative = "consultiv" in joined or "acolhed" in joined or "humaniz" in joined
+    return short_questions, consultative
+
+
+def _lookup_objection_reply(objection_type: str, policy_context: dict[str, Any] | None) -> str | None:
+    if not isinstance(policy_context, dict):
+        return None
+    objection_playbook = policy_context.get("objection_playbook")
+    agent_objection_replies = policy_context.get("agent_objection_replies")
+    if not isinstance(objection_playbook, dict):
+        objection_playbook = {}
+    if not isinstance(agent_objection_replies, dict):
+        agent_objection_replies = {}
+
+    aliases = {
+        "fees": ("preco", "preço", "taxa", "custo", "caro", "juros", "administracao", "administração"),
+        "trust": ("confianca", "confiança", "seguranca", "segurança", "credibilidade", "trust"),
+        "comparison": ("comparacao", "comparação", "financiamento", "comparativo"),
+        "lance": ("lance",),
+        "timeline": ("prazo", "tempo", "contemplacao", "contemplação"),
+    }
+
+    for source in (objection_playbook, agent_objection_replies):
+        normalized_source = {
+            str(key).lower(): str(value).strip()
+            for key, value in source.items()
+            if isinstance(key, str) and isinstance(value, str) and str(value).strip()
+        }
+        for alias in aliases.get(objection_type, ()):
+            if alias in normalized_source:
+                return normalized_source[alias]
+        for key, value in normalized_source.items():
+            if any(alias in key for alias in aliases.get(objection_type, ())):
+                return value
+    return None
+
+
+def slot_prompt(slot_name: str, *, greeted: bool, policy_context: dict[str, Any] | None = None) -> list[str]:
+    short_questions, consultative = _style_context(policy_context)
+    lead_name_prompt = "Qual é o seu nome?" if short_questions else "Para eu te atender melhor, qual é o seu nome?"
+    lead_name_opening = "Olá! Aqui é da Orfi Consórcios." if short_questions else "Olá! Aqui é da Orfi Consórcios."
+    asset_type_prompt = (
+        "Você busca imóvel ou veículo?"
+        if short_questions
+        else "Me conta uma coisa: você está buscando imóvel ou veículo?"
+        if consultative
+        else "Você está buscando imóvel ou veículo?"
+    )
+    goal_prompt = (
+        "Seu objetivo é morar, investir ou outro?"
+        if short_questions
+        else "Seu objetivo principal é morar, investir ou outro?"
+    )
+    asset_value_prompt = (
+        "Qual é a faixa de valor do bem?"
+        if short_questions
+        else "Qual é a faixa de valor do bem que você busca?"
+    )
+    timeline_prompt = "Qual prazo faz sentido para você?" if short_questions else "Qual prazo faz sentido para você?"
+    budget_prompt = (
+        "Qual parcela mensal faz sentido para você?"
+        if short_questions
+        else "Qual valor de parcela mensal faz sentido para você?"
+    )
     prompts = {
-        "lead_name": [
-            "Olá! Aqui é da Orfi Consórcios.",
-            "Para eu te atender melhor, qual é o seu nome?",
-        ]
-        if not greeted
-        else ["Para eu te atender melhor, qual é o seu nome?"],
-        "asset_type": ["Você está buscando imóvel ou veículo?"],
-        "goal": ["Seu objetivo principal é morar, investir ou outro?"],
-        "asset_value": ["Qual é a faixa de valor do bem que você busca?"],
-        "timeline": ["Qual prazo faz sentido para você?"],
-        "budget_monthly": ["Qual valor de parcela mensal faz sentido para você?"],
+        "lead_name": [lead_name_opening, lead_name_prompt] if not greeted else [lead_name_prompt],
+        "asset_type": [asset_type_prompt],
+        "goal": [goal_prompt],
+        "asset_value": [asset_value_prompt],
+        "timeline": [timeline_prompt],
+        "budget_monthly": [budget_prompt],
         "cpf": ["Antes de seguir com a simulação, preciso confirmar seu CPF."],
         "phone": ["E qual telefone devo usar no seu cadastro?"],
     }
     return prompts.get(slot_name, ["Me diga um pouco mais para eu seguir com você."])
 
 
-def follow_up_for_slot(slot_name: str) -> str:
+def follow_up_for_slot(slot_name: str, policy_context: dict[str, Any] | None = None) -> str:
     labels = {
         "lead_name": "nome do lead",
         "asset_type": "tipo de bem",
@@ -191,6 +263,10 @@ def follow_up_for_slot(slot_name: str) -> str:
         "cpf": "CPF",
         "phone": "telefone",
     }
+    if isinstance(policy_context, dict):
+        follow_up_rules = policy_context.get("follow_up_rules")
+        if isinstance(follow_up_rules, list) and follow_up_rules:
+            return f"Capturar {labels.get(slot_name, slot_name)}. Diretriz ativa: {follow_up_rules[0]}"
     return f"Capturar {labels.get(slot_name, slot_name)}."
 
 
@@ -216,7 +292,10 @@ def slot_confirmation(new_slots: dict[str, str]) -> str | None:
     return f"Perfeito, anotei {'; '.join(parts[:3])}."
 
 
-def objection_reply(objection_type: str, slots: dict[str, str]) -> str:
+def objection_reply(objection_type: str, slots: dict[str, str], policy_context: dict[str, Any] | None = None) -> str:
+    configured_reply = _lookup_objection_reply(objection_type, policy_context)
+    if configured_reply:
+        return configured_reply
     if objection_type == "fees":
         return "Faz sentido olhar isso com cuidado. O melhor caminho aqui é comparar o custo total e o prazo da proposta oficial, sem prometer economia fora do cenário real."
     if objection_type == "trust":

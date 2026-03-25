@@ -10,7 +10,6 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.graph import run_sales_agent
 from app.agents.state import AgentState
 from app.models.entities import Agent, AgentImprovement, AgentVersion, BotPersona, Conversation, EvaluationRun, Lead, Message, PersonaVersion
 from app.schemas.agents import AgentVersionCreateRequest
@@ -32,12 +31,15 @@ from app.services.agents import (
 )
 from app.services.conversation_context import refresh_conversation_context_from_db
 from app.services.knowledge_ops import create_evaluation_run, mark_evaluation_finished, mark_evaluation_started
+from app.services.lead_capture import apply_lead_capture
 from app.services.llm import analyze_sales_conversations, judge_sales_reply
 from app.services.messages import (
     create_lab_conversation,
+    get_lead_for_conversation,
     list_recent_conversation_messages,
     persist_conversation_exchange,
 )
+from app.services.runtime_router import apply_runtime_slot_projection, run_configured_sales_runtime
 from app.services.personas import create_persona_version, get_persona_or_none
 
 
@@ -289,6 +291,52 @@ def _heuristic_issue_stats(messages: list[Message]) -> dict[str, int]:
     }
 
 
+async def _run_training_turn(
+    *,
+    db: AsyncSession,
+    tenant_id: str,
+    agent_id: str,
+    conversation: Conversation,
+    lead: Lead,
+    message_text: str,
+    history: list[Message],
+) -> tuple[Any, str]:
+    apply_lead_capture(lead, text=message_text, fallback_phone=lead.phone)
+    await db.flush()
+    state = AgentState(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        lead_id=conversation.lead_id,
+        conversation_id=conversation.id,
+        channel="lab",
+        message_text=message_text,
+        conversation_history=[
+            {
+                "role": "assistant" if message.sender_type == "assistant" else "user",
+                "content": message.content,
+            }
+            for message in history
+        ],
+        lead_profile=lead,
+    )
+    runtime_state, model_name = await run_configured_sales_runtime(
+        state=state,
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        lead=lead,
+        channel="lab",
+        attachments=[],
+    )
+    apply_runtime_slot_projection(
+        lead,
+        getattr(runtime_state, "slot_projection", {}),
+        source="langgraph",
+        runtime_metadata=getattr(runtime_state, "runtime_metadata", None),
+    )
+    await db.flush()
+    return runtime_state, model_name
+
+
 async def _list_operational_conversations(
     db: AsyncSession,
     tenant_id: str,
@@ -463,24 +511,19 @@ async def _run_cycle(
     score_buckets = {"grounding": [], "qualification": [], "next_step": [], "objection": [], "length": []}
     findings_counter: Counter[str] = Counter()
 
+    lead = await get_lead_for_conversation(db, conversation)
+
     for turn_no, scenario in enumerate(scenarios, start=1):
         history = await list_recent_conversation_messages(db, tenant_id, conversation.id)
-        state = AgentState(
+        state, model_name = await _run_training_turn(
+            db=db,
             tenant_id=tenant_id,
             agent_id=agent.id,
-            lead_id=conversation.lead_id,
-            conversation_id=conversation.id,
-            channel="lab",
+            conversation=conversation,
+            lead=lead,
             message_text=scenario.message,
-            conversation_history=[
-                {
-                    "role": "assistant" if message.sender_type == "assistant" else "user",
-                    "content": message.content,
-                }
-                for message in history
-            ],
+            history=history,
         )
-        state = await run_sales_agent(state)
         await persist_conversation_exchange(
             db=db,
             conversation=conversation,
@@ -488,7 +531,7 @@ async def _run_cycle(
             assistant_text=state.draft_reply,
             intent=state.intent,
             confidence_score=state.confidence_score,
-            model_name="training-simulator",
+            model_name=model_name,
             reply_fragments=state.reply_fragments,
             follow_up_suggestion=state.follow_up_suggestion,
         )
